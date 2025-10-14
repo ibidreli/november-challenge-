@@ -1,0 +1,5 @@
+body { font-family: Arial, sans-serif; padding: 20px; background:#f7f7f7; color:#111; }
+.container { max-width:880px; margin:0 auto; background:#fff; padding:20px; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+button { padding:6px 12px; margin:4px; cursor:pointer; }
+table { width:100%; border-collapse:collapse; margin-top:8px; }
+th, td { text-align:left; padding:6px; border-bottom:1px solid #eee; }

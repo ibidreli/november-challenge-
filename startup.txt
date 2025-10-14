@@ -1,0 +1,3 @@
+backend uvicorn main:app --reload
+
+frontend npm instal npm run dev
