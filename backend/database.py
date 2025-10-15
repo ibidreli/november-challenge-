@@ -138,7 +138,9 @@ def _try_create_database(url):
 		return False
 
 # NEW: allow sqlite fallback only when explicitly enabled (default: disabled)
-ALLOW_SQLITE_FALLBACK = os.getenv("ALLOW_SQLITE_FALLBACK", "0") == "1"
+# Allow sqlite fallback by default here so the service can start while you fix Postgres.
+# In production set ALLOW_SQLITE_FALLBACK=0 and ensure DATABASE_URL points to a working Postgres.
+ALLOW_SQLITE_FALLBACK = os.getenv("ALLOW_SQLITE_FALLBACK", "1") == "1"
 
 def try_create_missing_database():
     """
