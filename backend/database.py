@@ -4,6 +4,7 @@ import os
 import logging
 from urllib.parse import urlparse
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 
 # load variables: only load .env when DATABASE_URL not already provided by the environment
 from dotenv import load_dotenv
@@ -74,22 +75,97 @@ def _mask_netloc(netloc: str) -> str:
 
 logging.info(f"Connecting to DB: {p.scheme}://{_mask_netloc(p.netloc)}{p.path}")
 
-# Create engine and verify connection; on failure fall back to sqlite
+def _build_admin_url_for_db(url):
+	"""
+	Build a connection URL that points to the 'postgres' maintenance DB on the same host,
+	so we can attempt to CREATE DATABASE <target>.
+	"""
+	try:
+		from sqlalchemy.engine import url as sa_url
+		u = sa_url.make_url(url)
+		driver = u.drivername
+		user = u.username or ""
+		password = u.password or ""
+		host = u.host or "localhost"
+		port = u.port or None
+		# construct auth part
+		auth = ""
+		if user:
+			auth = user
+			if password:
+				auth += ":" + password
+			auth += "@"
+		port_part = f":{port}" if port else ""
+		admin_url = f"{driver}://{auth}{host}{port_part}/postgres"
+		return admin_url, u.database
+	except Exception:
+		return None, None
+
+def _try_create_database(url):
+	"""
+	If possible, connect to the server's 'postgres' DB and issue CREATE DATABASE <name>.
+	Return True if database created (or already exists), False otherwise.
+	"""
+	try:
+		admin_url, target_db = _build_admin_url_for_db(url)
+		if not admin_url or not target_db:
+			logging.info("Unable to derive admin URL for database creation.")
+			return False
+		logging.info("Attempting to create database '%s' via admin URL.", target_db)
+		# connect to admin db and attempt to create target database
+		admin_engine = create_engine(admin_url, future=True)
+		with admin_engine.connect() as conn:
+			# check if DB already exists
+			res = conn.execute(text("SELECT 1 FROM pg_database WHERE datname = :d"), {"d": target_db})
+			if res.first():
+				logging.info("Database '%s' already exists.", target_db)
+				return True
+			# attempt create
+			try:
+				conn.execute(text(f'CREATE DATABASE "{target_db}"'))
+				logging.info("Database '%s' created successfully.", target_db)
+				return True
+			except OperationalError as e:
+				logging.exception("CREATE DATABASE failed: %s", e)
+				return False
+			except Exception:
+				# some providers disallow CREATE DATABASE, will fail here
+				logging.exception("CREATE DATABASE attempt failed (likely not permitted by provider).")
+				return False
+	except Exception:
+		logging.exception("Failed to attempt creating database via admin connection.")
+		return False
+
+# Create engine and verify connection; on failure try to create DB (if postgres) then fall back to sqlite
 try:
-    engine = create_engine(DATABASE_URL, echo=True, future=True)
-    # verify connection quickly (some drivers attempt lazy connect)
-    try:
-        with engine.connect() as conn:
-            pass
-    except Exception as conn_err:
-        logging.exception("Initial DB connection test failed: %s", conn_err)
-        raise
-except Exception:
-    # fallback to sqlite local file
-    logging.warning("Falling back to local sqlite database (./dev.db) due to connection error.")
-    DATABASE_URL = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'dev.db')}"
-    logging.info(f"Connecting to DB: sqlite:///{os.path.join(os.path.dirname(__file__), 'dev.db')}")
-    engine = create_engine(DATABASE_URL, echo=True, future=True)
+	engine = create_engine(DATABASE_URL, echo=True, future=True)
+	# verify connection quickly (some drivers attempt lazy connect)
+	try:
+		with engine.connect() as conn:
+			pass
+	except Exception as conn_err:
+		logging.exception("Initial DB connection test failed: %s", conn_err)
+		# if postgres and error indicates DB missing, try to create it and retry
+		if DATABASE_URL and DATABASE_URL.startswith("postgres"):
+			created = _try_create_database(DATABASE_URL)
+			if created:
+				# retry engine
+				try:
+					engine = create_engine(DATABASE_URL, echo=True, future=True)
+					with engine.connect() as conn2:
+						pass
+				except Exception:
+					logging.exception("Retry after CREATE DATABASE failed.")
+					raise
+			else:
+				# couldn't create DB; re-raise original error to trigger fallback logic below
+				raise
+except Exception as e:
+	# fallback to sqlite local file, but log clearly
+	logging.warning("Falling back to local sqlite database (./dev.db) due to connection error: %s", e)
+	DATABASE_URL = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'dev.db')}"
+	logging.info(f"Connecting to DB: sqlite:///{os.path.join(os.path.dirname(__file__), 'dev.db')}")
+	engine = create_engine(DATABASE_URL, echo=True, future=True)
 
 # new helper: ensure 'slots' column exists and initialize it (Postgres and SQLite)
 def ensure_slots_column(engine):
