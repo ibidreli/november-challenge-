@@ -1,13 +1,14 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
-from dotenv import load_dotenv
 import os
 import logging
 from urllib.parse import urlparse
 from sqlalchemy import text
 
-# load variables
-load_dotenv()
+# load variables: only load .env when DATABASE_URL not already provided by the environment
+from dotenv import load_dotenv
+if not os.getenv("DATABASE_URL"):
+    load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -46,6 +47,12 @@ if _contains_placeholders(DATABASE_URL) or _port_invalid(DATABASE_URL):
         "Set a valid DATABASE_URL in your .env to connect to Postgres."
     )
     DATABASE_URL = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'dev.db')}"
+
+# NEW: optional safety check to avoid running with sqlite in production.
+# Set env REQUIRE_POSTGRES=1 in Render service to enforce using Postgres (will raise on startup if still sqlite).
+if os.getenv("REQUIRE_POSTGRES", "0") == "1" and DATABASE_URL and DATABASE_URL.startswith("sqlite"):
+    logging.error("REQUIRE_POSTGRES is set but DATABASE_URL points to sqlite. Set a Postgres DATABASE_URL in Render env.")
+    raise RuntimeError("REQUIRE_POSTGRES=1 requires a Postgres DATABASE_URL. Set DATABASE_URL in Render to a Postgres URL and redeploy.")
 
 # Only append client_encoding for non-sqlite URLs
 if not DATABASE_URL.startswith("sqlite"):
