@@ -5,12 +5,13 @@
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from database import SessionLocal, engine, Base, get_db, ensure_slots_column, ensure_strava_id_column_type
+from database import SessionLocal, engine, Base, get_db, ensure_slots_column, ensure_strava_id_column_type, DATABASE_URL
 from models import user, activity, claim
 from auth.routes import router as auth_router
 from routes.activities import router as activities_router
 from routes.users import router as users_router
 from routes.strava_webhook import router as strava_webhook_router
+from urllib.parse import urlparse
 
 
 
@@ -56,3 +57,50 @@ def debug_users_count(db: Session = Depends(get_db)):
 @app.get("/healthz")
 def healthz():
     return {"status": "ok"}
+
+
+@app.get("/debug/db_info")
+def debug_db_info(db: Session = Depends(get_db)):
+	"""
+	Return basic info about the database connection and some table counts / sample data.
+	Use this to verify which DATABASE_URL is active on the running service.
+	"""
+	# mask password in netloc
+	def _mask_netloc(netloc: str) -> str:
+		if "@" in netloc and ":" in netloc.split("@")[0]:
+			userinfo, hostinfo = netloc.split("@", 1)
+			user = userinfo.split(":", 1)[0]
+			return f"{user}:***@{hostinfo}"
+		return netloc
+
+	p = urlparse(DATABASE_URL or "")
+	db_url_masked = f"{p.scheme}://{_mask_netloc(p.netloc)}{p.path}"
+
+	# gather counts (safe queries)
+	try:
+		from models.user import User
+		from models.activity import Activity
+		from models.claim import Claim
+		users_count = db.query(User).count()
+		activities_count = db.query(Activity).count()
+		claims_count = db.query(Claim).count()
+		first_user = db.query(User).first()
+		first_slots = None
+		if first_user:
+			# ensure slots is python data
+			try:
+				first_slots = first_user.slots
+			except Exception:
+				first_slots = str(first_user.slots)
+	except Exception as e:
+		# if models/tables missing, return error info
+		return {"database_url": db_url_masked, "db_scheme": p.scheme, "error": str(e)}
+
+	return {
+		"database_url": db_url_masked,
+		"db_scheme": p.scheme,
+		"users_count": users_count,
+		"activities_count": activities_count,
+		"claims_count": claims_count,
+		"first_user_slots_sample": first_slots
+	}
