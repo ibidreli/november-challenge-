@@ -84,35 +84,56 @@ except Exception:
     logging.info(f"Connecting to DB: sqlite:///{os.path.join(os.path.dirname(__file__), 'dev.db')}")
     engine = create_engine(DATABASE_URL, echo=True, future=True)
 
-# new helper: ensure 'slots' column exists and initialize it (Postgres only)
+# new helper: ensure 'slots' column exists and initialize it (Postgres and SQLite)
 def ensure_slots_column(engine):
     """
-    For Postgres: add JSON 'slots' column to users table if missing and initialize
-    existing rows with a 30-entry JSON array of nulls.
-    No-op for non-postgres URLs.
+    Ensure 'slots' column exists on users table.
+    - Postgres: add JSON column, initialize rows and set NOT NULL/default.
+    - SQLite: ALTER TABLE ADD COLUMN (TEXT) and initialize rows with JSON array string.
+    No-op for other DBs.
     """
     try:
         p = urlparse(DATABASE_URL or "")
-        if not p.scheme or not p.scheme.startswith("postgres"):
-            # only handle Postgres automatic migration here
-            return
         nulls = ",".join(["null"] * 30)
+        json_value = f"[{nulls}]"
         with engine.begin() as conn:
-            # check existence
-            res = conn.execute(text("""
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'users' AND column_name = 'slots'
-                LIMIT 1
-            """))
-            if res.first():
+            # Postgres path (unchanged behavior)
+            if p.scheme and p.scheme.startswith("postgres"):
+                res = conn.execute(text("""
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'users' AND column_name = 'slots'
+                    LIMIT 1
+                """))
+                if res.first():
+                    return
+                logging.info("Adding 'slots' column to users table (automatic startup migration).")
+                conn.execute(text("ALTER TABLE users ADD COLUMN slots JSON"))
+                conn.execute(text(f"UPDATE users SET slots = '[{nulls}]'::json WHERE slots IS NULL"))
+                conn.execute(text("ALTER TABLE users ALTER COLUMN slots SET DEFAULT '[]'::json"))
+                conn.execute(text("ALTER TABLE users ALTER COLUMN slots SET NOT NULL"))
+                logging.info("'slots' column added and initialized (Postgres).")
                 return
-            logging.info("Adding 'slots' column to users table (automatic startup migration).")
-            # add column (allow NULL temporarily), initialize rows, then set NOT NULL and default
-            conn.execute(text("ALTER TABLE users ADD COLUMN slots JSON"))
-            conn.execute(text(f"UPDATE users SET slots = '[{nulls}]'::json WHERE slots IS NULL"))
-            conn.execute(text("ALTER TABLE users ALTER COLUMN slots SET DEFAULT '[]'::json"))
-            conn.execute(text("ALTER TABLE users ALTER COLUMN slots SET NOT NULL"))
-            logging.info("'slots' column added and initialized.")
+
+            # SQLite path
+            if p.scheme and p.scheme.startswith("sqlite"):
+                # check users table exists
+                t = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")).fetchone()
+                if not t:
+                    return
+                # check existing columns
+                cols = [row[1] for row in conn.execute(text("PRAGMA table_info('users')")).fetchall()]
+                if "slots" in cols:
+                    return
+                logging.info("Adding 'slots' column to users table (SQLite automatic startup migration).")
+                # add column as TEXT (store JSON string)
+                conn.execute(text("ALTER TABLE users ADD COLUMN slots TEXT"))
+                # initialize existing rows where NULL or empty
+                conn.execute(text("UPDATE users SET slots = :val WHERE slots IS NULL OR slots = ''"), {"val": json_value})
+                logging.info("'slots' column added and initialized (SQLite).")
+                return
+
+            # other DBs: no-op
+            return
     except Exception:
         logging.exception("Failed to ensure 'slots' column exists. Manual migration may be required.")
 
