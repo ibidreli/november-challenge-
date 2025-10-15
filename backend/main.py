@@ -51,3 +51,8 @@ def debug_users_count(db: Session = Depends(get_db)):
     from models.user import User
     count = db.query(User).count()
     return {"users_count": count}
+
+
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}
