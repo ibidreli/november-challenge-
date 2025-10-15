@@ -136,36 +136,75 @@ def _try_create_database(url):
 		logging.exception("Failed to attempt creating database via admin connection.")
 		return False
 
-# Create engine and verify connection; on failure try to create DB (if postgres) then fall back to sqlite
+# NEW: allow sqlite fallback only when explicitly enabled (default: disabled in production)
+ALLOW_SQLITE_FALLBACK = os.getenv("ALLOW_SQLITE_FALLBACK", "0") == "1"
+
+def try_create_missing_database():
+    """
+    Public wrapper: attempt to create the target database on the server (if Postgres).
+    Returns (True, message) on success or (False, message) on failure.
+    """
+    try:
+        if not DATABASE_URL or not DATABASE_URL.startswith("postgres"):
+            return False, "Not a Postgres DATABASE_URL"
+        created = _try_create_database(DATABASE_URL)
+        if created:
+            return True, "Database created or already exists"
+        return False, "CREATE DATABASE attempt failed (see logs)"
+    except Exception as e:
+        logging.exception("try_create_missing_database failed: %s", e)
+        return False, f"Exception: {e}"
+
+# Create engine and verify connection; on failure try to create DB (if postgres) then fall back to sqlite only if allowed
 try:
-	engine = create_engine(DATABASE_URL, echo=True, future=True)
-	# verify connection quickly (some drivers attempt lazy connect)
-	try:
-		with engine.connect() as conn:
-			pass
-	except Exception as conn_err:
-		logging.exception("Initial DB connection test failed: %s", conn_err)
-		# if postgres and error indicates DB missing, try to create it and retry
-		if DATABASE_URL and DATABASE_URL.startswith("postgres"):
-			created = _try_create_database(DATABASE_URL)
-			if created:
-				# retry engine
-				try:
-					engine = create_engine(DATABASE_URL, echo=True, future=True)
-					with engine.connect() as conn2:
-						pass
-				except Exception:
-					logging.exception("Retry after CREATE DATABASE failed.")
-					raise
-			else:
-				# couldn't create DB; re-raise original error to trigger fallback logic below
-				raise
+    engine = create_engine(DATABASE_URL, echo=True, future=True)
+    # verify connection quickly (some drivers attempt lazy connect)
+    try:
+        with engine.connect() as conn:
+            pass
+    except Exception as conn_err:
+        logging.exception("Initial DB connection test failed: %s", conn_err)
+        # if postgres and error indicates DB missing, try to create it and retry
+        if DATABASE_URL and DATABASE_URL.startswith("postgres"):
+            created = _try_create_database(DATABASE_URL)
+            if created:
+                # retry engine
+                try:
+                    engine = create_engine(DATABASE_URL, echo=True, future=True)
+                    with engine.connect() as conn2:
+                        pass
+                except Exception as e:
+                    logging.exception("Retry after CREATE DATABASE failed: %s", e)
+                    # If fallback allowed, fall back; otherwise raise
+                    if ALLOW_SQLITE_FALLBACK:
+                        raise
+                    else:
+                        raise RuntimeError(f"Failed to connect to Postgres after CREATE DB attempt: {e}") from e
+            else:
+                # couldn't create DB
+                msg = "Could not create target database on Postgres server. Please create it in your DB provider or check credentials."
+                logging.error(msg)
+                if ALLOW_SQLITE_FALLBACK:
+                    raise
+                else:
+                    raise RuntimeError(msg)
+        else:
+            # non‑Postgres or other error: follow fallback only if allowed
+            logging.exception("DB connection failed and not postgres/creation not attempted: %s", conn_err)
+            if ALLOW_SQLITE_FALLBACK:
+                raise
+            else:
+                raise RuntimeError(f"Database connection failed: {conn_err}") from conn_err
 except Exception as e:
-	# fallback to sqlite local file, but log clearly
-	logging.warning("Falling back to local sqlite database (./dev.db) due to connection error: %s", e)
-	DATABASE_URL = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'dev.db')}"
-	logging.info(f"Connecting to DB: sqlite:///{os.path.join(os.path.dirname(__file__), 'dev.db')}")
-	engine = create_engine(DATABASE_URL, echo=True, future=True)
+    # if allowed, fallback; otherwise re-raise to surface the error in logs (and make service fail)
+    if ALLOW_SQLITE_FALLBACK:
+        logging.warning("Falling back to local sqlite database (./dev.db) due to connection error: %s", e)
+        DATABASE_URL = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'dev.db')}"
+        logging.info(f"Connecting to DB: sqlite:///{os.path.join(os.path.dirname(__file__), 'dev.db')}")
+        engine = create_engine(DATABASE_URL, echo=True, future=True)
+    else:
+        logging.critical("Database initialization failed and ALLOW_SQLITE_FALLBACK!=1. Aborting startup. Error: %s", e)
+        raise
 
 # new helper: ensure 'slots' column exists and initialize it (Postgres and SQLite)
 def ensure_slots_column(engine):

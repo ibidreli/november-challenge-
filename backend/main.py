@@ -5,7 +5,7 @@
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from database import SessionLocal, engine, Base, get_db, ensure_slots_column, ensure_strava_id_column_type, DATABASE_URL
+from database import SessionLocal, engine, Base, get_db, ensure_slots_column, ensure_strava_id_column_type, DATABASE_URL, try_create_missing_database
 from models import user, activity, claim
 from auth.routes import router as auth_router
 from routes.activities import router as activities_router
@@ -104,3 +104,13 @@ def debug_db_info(db: Session = Depends(get_db)):
 		"claims_count": claims_count,
 		"first_user_slots_sample": first_slots
 	}
+
+
+@app.post("/admin/create_db")
+def admin_create_db():
+    """
+    Admin helper: attempt to create the configured Postgres database using the DB server's 'postgres' maintenance DB.
+    Returns JSON with success flag and message. Only for debugging / initial setup.
+    """
+    ok, msg = try_create_missing_database()
+    return {"ok": ok, "message": msg}
