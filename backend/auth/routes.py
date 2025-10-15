@@ -25,14 +25,13 @@ CHALLENGE_MONTH = int(os.getenv("CHALLENGE_MONTH", "11"))
 def build_strava_auth_url(request: Request | None = None):
     client_id = os.getenv("STRAVA_CLIENT_ID")
     redirect_uri_env = os.getenv("STRAVA_REDIRECT_URI") or ""
-    # If env redirect is not set or points to localhost, prefer the request's base URL (useful with ngrok)
-    if redirect_uri_env.strip() and not redirect_uri_env.strip().lower().startswith(("http://localhost", "http://127.0.0.1")):
+    # Prefer explicit env var in production. If not set, try to build from request (for ngrok/dev).
+    if redirect_uri_env.strip():
         redirect_uri = redirect_uri_env
     elif request is not None:
-        # build redirect from current request base (keeps https when using ngrok)
         redirect_uri = str(request.base_url).rstrip("/") + "/auth/callback"
     else:
-        # fallback to default
+        # last-resort fallback (only for local dev)
         redirect_uri = "http://localhost:8000/auth/callback"
 
     scope = os.getenv("STRAVA_SCOPE", "read,activity:read_all")

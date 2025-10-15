@@ -1,14 +1,15 @@
 FROM python:3.11-slim
 WORKDIR /app
 
-# dependencies file is expected in the backend build context
+# copy requirements from backend build context
 COPY requirements.txt .
+
 RUN pip install --no-cache-dir -r requirements.txt
 
-# copy backend sources (context is backend/)
+# copy backend sources (build context is backend/)
 COPY . .
 
 ENV PYTHONUNBUFFERED=1
 
-# Start the FastAPI app (main.py is in the backend root)
+# Start the FastAPI app
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
