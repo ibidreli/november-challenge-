@@ -6,9 +6,10 @@ from urllib.parse import urlparse
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
-# load variables: only load .env when DATABASE_URL not already provided by the environment
+# load variables: load .env only when explicitly requested (avoid using repo .env in production)
 from dotenv import load_dotenv
-if not os.getenv("DATABASE_URL"):
+if os.getenv("LOAD_ENV_FILE", "0") == "1":
+    # developer opt-in to load .env (useful for local dev)
     load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -136,8 +137,8 @@ def _try_create_database(url):
 		logging.exception("Failed to attempt creating database via admin connection.")
 		return False
 
-# NEW: allow sqlite fallback only when explicitly enabled (default: enabled for now so service can start)
-ALLOW_SQLITE_FALLBACK = os.getenv("ALLOW_SQLITE_FALLBACK", "1") == "1"
+# NEW: allow sqlite fallback only when explicitly enabled (default: disabled)
+ALLOW_SQLITE_FALLBACK = os.getenv("ALLOW_SQLITE_FALLBACK", "0") == "1"
 
 def try_create_missing_database():
     """
