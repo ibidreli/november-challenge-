@@ -1,13 +1,76 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 from models.activity import Activity
 from models.claim import Claim
 from models.user import User
 from database import get_db
 import datetime
 import requests
+import os
 
 router = APIRouter()
+
+# new: configure challenge month via env (default 11 = November)
+CHALLENGE_MONTH = int(os.getenv("CHALLENGE_MONTH", "11"))
+
+
+# new helper: process an Activity instance (reusable)
+def process_activity_instance(activity: Activity, db: Session, simulate_month: int | None = None):
+    """
+    Process an Activity SQLAlchemy instance and create a Claim if possible.
+    Returns dict with result (same shape as endpoint responses).
+    """
+    if not activity:
+        raise ValueError("activity is None")
+    if not activity.user_id:
+        return {"error": "Activity has no associated user"}
+    user = db.query(User).filter(User.id == activity.user_id).first()
+    if not user:
+        return {"error": "User not found"}
+
+    act_date = activity.date
+    if not isinstance(act_date, datetime.date):
+        return {"error": "Activity date invalid"}
+
+    # Only one claim per user per day
+    existing_claim = db.query(Claim).filter(Claim.user_id == user.id, Claim.date == act_date).first()
+    if existing_claim:
+        return {"message": "User already has a claim for this date", "claim": {"km": existing_claim.km}}
+
+    # Determine month to use (env override or simulate param)
+    month_to_check = simulate_month if simulate_month is not None else CHALLENGE_MONTH
+
+    if month_to_check != act_date.month:
+        return {"message": "Activity is outside challenge month; ignored for challenge.", "month_checked": month_to_check}
+
+    day = act_date.day
+    max_allowed = 30 if day == 30 else 29
+    # floor distance
+    if activity.distance_km is None:
+        return {"error": "Activity distance missing"}
+    floor_km = int(activity.distance_km // 1)
+    candidate_start = min(floor_km, max_allowed)
+
+    # use assign_activity to pick the best available slot <= candidate_start
+    assigned = user.assign_activity(candidate_start, activity.id)
+    if assigned:
+        # create claim and persist changes (user.slots and user.total_score already updated)
+        claim = Claim(user_id=user.id, km=assigned, date=act_date, activity_id=activity.id)
+        db.add(claim)
+        activity.status = "claimed"
+        activity.effective_km = assigned
+        # ensure SQLAlchemy sees slots change (assign_activity already flagged, but be safe)
+        try:
+            flag_modified(user, "slots")
+        except Exception:
+            pass
+        db.add(user)
+        db.add(activity)
+        db.commit()
+        db.refresh(claim)
+        return {"message": "Claim created", "km": assigned}
+    return {"message": "No available km to claim for this activity"}
 
 
 @router.get("/")
@@ -25,52 +88,12 @@ def process_activity(activity_id: int, simulate_november: bool = False, db: Sess
     if not activity:
         raise HTTPException(status_code=404, detail="Activity not found")
 
-    if not activity.user_id:
-        raise HTTPException(status_code=400, detail="Activity has no associated user")
-
-    user = db.query(User).filter(User.id == activity.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    act_date = activity.date
-    if not isinstance(act_date, datetime.date):
-        raise HTTPException(status_code=400, detail="Activity date invalid")
-
-    # Only one claim per user per day
-    existing_claim = db.query(Claim).filter(Claim.user_id == user.id, Claim.date == act_date).first()
-    if existing_claim:
-        return {"message": "User already has a claim for this date", "claim": {"km": existing_claim.km}}
-
-    # Determine month to use (allow simulating November for tests)
-    month_to_check = 11 if simulate_november else act_date.month
-
-    # Only process November activities unless simulate_november is True
-    if month_to_check != 11:
-        return {"message": "Activity is outside November; ignored for challenge."}
-
-    day = act_date.day
-    max_allowed = 30 if day == 30 else 29
-
-    # floor distance
-    if activity.distance_km is None:
-        raise HTTPException(status_code=400, detail="Activity distance missing")
-    floor_km = int(activity.distance_km // 1)
-    candidate_start = min(floor_km, max_allowed)
-
-    # search from candidate_start down to 1 for an available km not yet claimed by anyone
-    for k in range(candidate_start, 0, -1):
-        taken = db.query(Claim).filter(Claim.km == k).first()
-        if not taken:
-            # create claim
-            claim = Claim(user_id=user.id, km=k, date=act_date, activity_id=activity.id)
-            db.add(claim)
-            # mark activity and update user score
-            activity.status = "claimed"
-            user.total_score = (user.total_score or 0) + k
-            db.commit()
-            db.refresh(claim)
-            return {"message": "Claim created", "km": k}
-    return {"message": "No available km to claim for this activity"}
+    # use simulate flag to override month for testing
+    simulate_month = 11 if simulate_november else None
+    result = process_activity_instance(activity, db, simulate_month=simulate_month)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
 
 
 # New endpoint: fetch activity from Strava (by strava activity id), store and process it.
@@ -130,5 +153,9 @@ def process_by_strava(strava_activity_id: int, owner_strava_id: int | None = Non
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to insert Activity: {e}")
 
-    # process newly created activity
-    return process_activity(activity.id, simulate_november, db)
+    # process newly created activity via helper
+    simulate_month = 11 if simulate_november else None
+    result = process_activity_instance(activity, db, simulate_month=simulate_month)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result

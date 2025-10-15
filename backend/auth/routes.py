@@ -11,15 +11,30 @@ from database import get_db
 from models.user import User
 import logging
 import traceback
+import datetime
+import os
 
 load_dotenv()
 
 router = APIRouter()
 
+# add: use CHALLENGE_MONTH env (default 11)
+CHALLENGE_MONTH = int(os.getenv("CHALLENGE_MONTH", "11"))
 
-def build_strava_auth_url():
+
+def build_strava_auth_url(request: Request | None = None):
     client_id = os.getenv("STRAVA_CLIENT_ID")
-    redirect_uri = os.getenv("STRAVA_REDIRECT_URI") or "http://localhost:8000/auth/callback"
+    redirect_uri_env = os.getenv("STRAVA_REDIRECT_URI") or ""
+    # If env redirect is not set or points to localhost, prefer the request's base URL (useful with ngrok)
+    if redirect_uri_env.strip() and not redirect_uri_env.strip().lower().startswith(("http://localhost", "http://127.0.0.1")):
+        redirect_uri = redirect_uri_env
+    elif request is not None:
+        # build redirect from current request base (keeps https when using ngrok)
+        redirect_uri = str(request.base_url).rstrip("/") + "/auth/callback"
+    else:
+        # fallback to default
+        redirect_uri = "http://localhost:8000/auth/callback"
+
     scope = os.getenv("STRAVA_SCOPE", "read,activity:read_all")
     params = {
         "client_id": client_id,
@@ -39,6 +54,133 @@ def _invalid_client_config():
     if not csec or csec.strip() == "" or csec.strip().startswith("<"):
         return True, "STRAVA_CLIENT_SECRET fehlt oder ist offensichtlich nicht gesetzt."
     return False, None
+
+
+# helper: sync recent activities from Strava (since last Monday)
+def sync_recent_activities_from_strava(user: User, db: Session):
+	"""
+	Fetch activities for the authenticated user from Strava starting from the
+	first day of CHALLENGE_MONTH (current year or previous year if month not yet reached),
+	insert new Activity rows and process them using the app's processing helper.
+	Returns summary dict.
+	"""
+	from models.activity import Activity as ActivityModel
+	# import processing helper locally to avoid circular imports
+	try:
+		from routes.activities import process_activity_instance, CHALLENGE_MONTH as ROUTE_CHALLENGE_MONTH
+	except Exception:
+		from backend.routes.activities import process_activity_instance, CHALLENGE_MONTH as ROUTE_CHALLENGE_MONTH
+
+	STRAVA_API_ACTIVITIES = "https://www.strava.com/api/v3/athlete/activities"
+	if not user or not user.access_token:
+		logging.info("No user or access_token for sync.")
+		return {"synced": 0, "reason": "no_token"}
+
+	# compute start = first day of CHALLENGE_MONTH
+	today = datetime.date.today()
+	month = CHALLENGE_MONTH if CHALLENGE_MONTH else ROUTE_CHALLENGE_MONTH
+	# pick year: if current month >= target month -> current year, else previous year
+	year = today.year if today.month >= month else today.year - 1
+	start_date = datetime.date(year, month, 1)
+	# start of day -> epoch seconds
+	since_dt = datetime.datetime.combine(start_date, datetime.time.min)
+	since_epoch = int(since_dt.timestamp())
+
+	headers = {"Authorization": f"Bearer {user.access_token}"}
+	per_page = 200
+	page = 1
+	synced = 0
+	try:
+		while True:
+			params = {"after": since_epoch, "per_page": per_page, "page": page}
+			r = requests.get(STRAVA_API_ACTIVITIES, headers=headers, params=params, timeout=15)
+			if r.status_code == 401:
+				# token invalid/expired — stop and surface the issue
+				logging.warning("Unauthorized when fetching activities for user %s", user.id)
+				return {"synced": synced, "error": "unauthorized"}
+			r.raise_for_status()
+			activities = r.json() or []
+			if not activities:
+				break
+			for a in activities:
+				try:
+					strava_aid = str(a.get("id"))
+					# skip if already stored
+					exists = db.query(ActivityModel).filter(ActivityModel.strava_id == strava_aid).first()
+					if exists:
+						continue
+					distance_m = a.get("distance") or 0
+					distance_km = float(distance_m) / 1000.0
+					start = a.get("start_date_local") or a.get("start_date")
+					if not start:
+						continue
+					if start.endswith("Z"):
+						start = start[:-1]
+					dt = datetime.datetime.fromisoformat(start)
+					act_date = dt.date()
+					# insert Activity
+					activity_obj = ActivityModel(user_id=user.id, strava_id=strava_aid, date=act_date, distance_km=distance_km, status="fetched")
+					db.add(activity_obj)
+					db.commit()
+					db.refresh(activity_obj)
+					# process using helper (use CHALLENGE_MONTH env if set)
+					simulate_month = int(os.getenv("CHALLENGE_MONTH")) if os.getenv("CHALLENGE_MONTH") else None
+					try:
+						process_activity_instance(activity_obj, db, simulate_month=simulate_month)
+					except Exception:
+						logging.exception("Processing activity failed for %s", strava_aid)
+					synced += 1
+				except Exception:
+					logging.exception("Error while importing an activity; skipping.")
+			# next page
+			page += 1
+	except Exception as e:
+		logging.exception("Failed to fetch athlete activities: %s", e)
+		return {"synced": synced, "error": str(e)}
+
+	return {"synced": synced}
+
+
+# new helper: refresh a user's access token using their refresh_token
+def refresh_user_token(user: User, db: Session) -> bool:
+    """
+    Try to refresh the Strava access token for the given user.
+    Returns True if refreshed and DB updated, False otherwise.
+    """
+    client_id = os.getenv("STRAVA_CLIENT_ID")
+    client_secret = os.getenv("STRAVA_CLIENT_SECRET")
+    if not user.refresh_token or not client_id or not client_secret:
+        logging.warning("Cannot refresh token: missing refresh_token or client credentials.")
+        return False
+    try:
+        resp = requests.post("https://www.strava.com/oauth/token", data={
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "grant_type": "refresh_token",
+            "refresh_token": user.refresh_token
+        }, timeout=10)
+        resp.raise_for_status()
+        tok = resp.json()
+        new_access = tok.get("access_token")
+        new_refresh = tok.get("refresh_token")
+        if new_access:
+            user.access_token = new_access
+            if new_refresh:
+                user.refresh_token = new_refresh
+            try:
+                db.add(user)
+                db.commit()
+                db.refresh(user)
+            except Exception:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+            logging.info("Refreshed access token for user %s", user.id)
+            return True
+    except Exception:
+        logging.exception("Failed to refresh token for user %s", getattr(user, "id", None))
+    return False
 
 
 @router.get("/login")
@@ -63,7 +205,8 @@ async def login(request: Request):
         """
         return HTMLResponse(content=html, status_code=400)
 
-    auth_url = build_strava_auth_url()
+    # build auth url using the incoming request (so ngrok/public host is used if present)
+    auth_url = build_strava_auth_url(request)
     accept = (request.headers.get("accept") or "").lower()
     xreq = request.headers.get("x-requested-with") or ""
     if "application/json" in accept or xreq.lower() == "xmlhttprequest":
@@ -108,6 +251,29 @@ async def callback(code: str | None = None, state: str | None = None, db: Sessio
             "code": code,
             "grant_type": "authorization_code"
         }, timeout=10)
+        # handle non-200 explicitly to detect Strava messages (e.g. connected-athletes limit)
+        if resp.status_code != 200:
+            text = resp.text or ""
+            # check for typical Strava "connected athletes" message fragments
+            if "connected" in text.lower() and "athlete" in text.lower() or "limit" in text.lower():
+                html = f"""
+                <!doctype html><html><head><meta charset="utf-8"><title>Strava App Limit erreicht</title></head>
+                <body style="font-family:Arial,sans-serif;padding:20px">
+                  <h2>Strava: App‑Limit erreicht</h2>
+                  <p>Strava hat gemeldet, dass die Anwendung das Limit verbundener Sportler überschritten hat.</p>
+                  <p>Optionen:</p>
+                  <ol>
+                    <li>Kontaktiere Strava Developer Support und bitte um eine Kontingenterhöhung:
+                        <a href="https://support.strava.com/hc/en-us/requests/new?ticket_form_id=360000051848" target="_blank">Strava Support</a>
+                    </li>
+                    <li>Erstelle vorübergehend eine eigene Strava‑App (Developer Dashboard) und trage deren Client-ID/Secret in deine <code>.env</code> ein, um Tests zu machen.</li>
+                    <li>Teste manuell mit einer bekannten Activity‑ID (ohne OAuth) via: <code>/activities/process_by_strava/{'{activity_id}'}?owner_strava_id=YOUR_STRAVA_ID</code></li>
+                  </ol>
+                  <pre style="background:#f6f6f6;padding:10px;border-radius:4px">{text}</pre>
+                </body></html>
+                """
+                return HTMLResponse(content=html, status_code=502)
+            # otherwise raise to existing handler
         resp.raise_for_status()
         data = resp.json()
     except Exception as e:
@@ -118,6 +284,7 @@ async def callback(code: str | None = None, state: str | None = None, db: Sessio
           <head><meta charset="utf-8" /></head>
           <body>
             <p>Token exchange failed. This window will close.</p>
+            <pre>{str(e)}</pre>
             <script>
               try {{
                 window.opener && window.opener.postMessage({payload!r}, "*");
@@ -208,6 +375,13 @@ async def callback(code: str | None = None, state: str | None = None, db: Sessio
         </html>
         """
         return HTMLResponse(content=html, status_code=500)
+
+    # After successful user creation/update: sync recent activities from Strava automatically
+    try:
+        sync_result = sync_recent_activities_from_strava(user, db)
+        logging.info("Sync result after auth: %s", sync_result)
+    except Exception:
+        logging.exception("Automatic sync after registration failed.")
 
     # success -> inform opener with basic user info
     payload = {"type": "strava_auth_complete", "success": True, "user": {"id": user.id, "name": user.name, "strava_id": user.strava_id}}
