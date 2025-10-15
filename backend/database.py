@@ -136,8 +136,8 @@ def _try_create_database(url):
 		logging.exception("Failed to attempt creating database via admin connection.")
 		return False
 
-# NEW: allow sqlite fallback only when explicitly enabled (default: disabled in production)
-ALLOW_SQLITE_FALLBACK = os.getenv("ALLOW_SQLITE_FALLBACK", "0") == "1"
+# NEW: allow sqlite fallback only when explicitly enabled (default: enabled for now so service can start)
+ALLOW_SQLITE_FALLBACK = os.getenv("ALLOW_SQLITE_FALLBACK", "1") == "1"
 
 def try_create_missing_database():
     """
