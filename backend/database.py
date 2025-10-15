@@ -116,14 +116,15 @@ def _try_create_database(url):
 		# connect to admin db and attempt to create target database
 		admin_engine = create_engine(admin_url, future=True)
 		with admin_engine.connect() as conn:
-			# check if DB already exists
+			# check if DB already exists (this can run inside a transaction)
 			res = conn.execute(text("SELECT 1 FROM pg_database WHERE datname = :d"), {"d": target_db})
 			if res.first():
 				logging.info("Database '%s' already exists.", target_db)
 				return True
-			# attempt create
+			# CREATE DATABASE must run outside a transaction -> use autocommit
 			try:
-				conn.execute(text(f'CREATE DATABASE "{target_db}"'))
+				conn_autocommit = conn.execution_options(isolation_level="AUTOCOMMIT")
+				conn_autocommit.execute(text(f'CREATE DATABASE "{target_db}"'))
 				logging.info("Database '%s' created successfully.", target_db)
 				return True
 			except OperationalError as e:
