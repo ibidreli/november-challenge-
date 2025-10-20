@@ -4,7 +4,8 @@ export default function LoginButton({ onLoginComplete = () => {} }) {
 	// Öffne Backend-Login direkt (Backend leitet dann zu Strava weiter).
 	const onLogin = () => {
 		// backend base: VITE_API_BASE_URL (build time) oder runtime origin
-		const backendBase = (import.meta.env.VITE_API_BASE_URL || window.location.origin).replace(/\/$/, "");
+		// prefer build-time VITE_API_BASE_URL, otherwise fallback to the real backend host
+		const backendBase = (import.meta.env.VITE_API_BASE_URL || "https://november-challenge.onrender.com").replace(/\/$/, "");
 		const url = `${backendBase}/auth/login`;
 		const popup = window.open(url, "strava_oauth", "width=600,height=700");
 		if (!popup) {

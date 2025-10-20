@@ -6,8 +6,8 @@ export default function Dashboard({ refreshKey = 0, onProcessed = () => {} }) {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // backend base: prefer VITE_API_BASE_URL at build time, else runtime origin
-  const backendBase = (import.meta.env.VITE_API_BASE_URL || window.location.origin).replace(/\/$/, "");
+  // prefer build-time VITE_API_BASE_URL, otherwise fall back to the known backend host
+  const backendBase = (import.meta.env.VITE_API_BASE_URL || "https://november-challenge.onrender.com").replace(/\/$/, "");
 
   const load = async () => {
     setLoading(true);

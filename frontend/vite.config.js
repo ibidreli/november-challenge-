@@ -8,23 +8,23 @@ export default defineConfig({
     host: true,
     port: 5173,
     // explizit erlaubte Hostnamen — kann per ENV überschrieben werden (VITE_ALLOWED_HOSTS, komma‑separiert)
-    allowedHosts: (process.env.VITE_ALLOWED_HOSTS || "localhost,127.0.0.1,ollie-strict-bimonthly.ngrok-free.dev,november-challenge-1.onrender.com,november-challenge.onrender.com")
+    allowedHosts: (process.env.VITE_ALLOWED_HOSTS || "localhost,127.0.0.1,ollie-strict-bimonthly.ngrok-free.dev,november-challenge.onrender.com")
       .split(",").map(h => h.trim()).filter(Boolean),
     proxy: {
       // verwende VITE_API_BASE_URL während der Entwicklung, falls gesetzt,
       // ansonsten Fallback auf deine Render‑Domain (kein localhost)
       "/auth": {
-        target: process.env.VITE_API_BASE_URL ? process.env.VITE_API_BASE_URL : "https://november-challenge-1.onrender.com",
+        target: process.env.VITE_API_BASE_URL ? process.env.VITE_API_BASE_URL : "https://november-challenge.onrender.com",
         changeOrigin: true,
         secure: false
       },
       "/users": {
-        target: process.env.VITE_API_BASE_URL ? process.env.VITE_API_BASE_URL : "https://november-challenge-1.onrender.com",
+        target: process.env.VITE_API_BASE_URL ? process.env.VITE_API_BASE_URL : "https://november-challenge.onrender.com",
         changeOrigin: true,
         secure: false
       },
       "/activities": {
-        target: process.env.VITE_API_BASE_URL ? process.env.VITE_API_BASE_URL : "https://november-challenge-1.onrender.com",
+        target: process.env.VITE_API_BASE_URL ? process.env.VITE_API_BASE_URL : "https://november-challenge.onrender.com",
         changeOrigin: true,
         secure: false
       },
