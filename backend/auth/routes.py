@@ -14,7 +14,9 @@ import traceback
 import datetime
 import os
 
-load_dotenv()
+# load .env only when explicitly requested (avoid accidentally overriding Render env vars)
+if os.getenv("LOAD_ENV_FILE", "0") == "1":
+    load_dotenv()
 
 router = APIRouter()
 
@@ -25,17 +27,19 @@ CHALLENGE_MONTH = int(os.getenv("CHALLENGE_MONTH", "11"))
 def build_strava_auth_url(request: Request | None = None):
     client_id = os.getenv("STRAVA_CLIENT_ID")
     redirect_uri_env = os.getenv("STRAVA_REDIRECT_URI") or ""
-    # If env redirect is set and NOT pointing to localhost/127.0.0.1, use it.
-    if redirect_uri_env.strip() and not redirect_uri_env.strip().lower().startswith((
-        "http://localhost", "https://localhost", "http://127.0.0.1", "https://127.0.0.1"
-    )):
+
+    # Prefer explicit environment variable (Render). Warn if it points to localhost.
+    if redirect_uri_env.strip():
+        if "localhost" in redirect_uri_env or "127.0.0.1" in redirect_uri_env:
+            logging.warning("STRAVA_REDIRECT_URI contains localhost/127.0.0.1 — this will redirect users to your local machine. Set STRAVA_REDIRECT_URI to your public Render domain.")
         redirect_uri = redirect_uri_env
     elif request is not None:
         # build redirect from current request base (keeps https when using ngrok / public domain)
         redirect_uri = str(request.base_url).rstrip("/") + "/auth/callback"
     else:
-        # fallback to env or localhost (local dev)
-        redirect_uri = redirect_uri_env or "http://localhost:8000/auth/callback"
+        # No env and no request base -> log error and return an empty URL (login will handle invalid config)
+        logging.error("No STRAVA_REDIRECT_URI env set and no request base available to build redirect_uri.")
+        redirect_uri = ""
 
     scope = os.getenv("STRAVA_SCOPE", "read,activity:read_all")
     params = {
