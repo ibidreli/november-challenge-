@@ -6,17 +6,21 @@ export default function Dashboard({ refreshKey = 0, onProcessed = () => {} }) {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // backend base: prefer VITE_API_BASE_URL at build time, else runtime origin
+  const backendBase = (import.meta.env.VITE_API_BASE_URL || window.location.origin).replace(/\/$/, "");
+
   const load = async () => {
     setLoading(true);
     try {
+      // Nutze absolute URLs, damit Requests zum Backend-Host gehen (nicht zum Frontend)
       const [u, a] = await Promise.all([
-        axios.get("/users/me").then(r => r.data).catch(() => null),
-        axios.get("/activities").then(r => r.data).catch(() => []),
+        axios.get(`${backendBase}/users/me`).then(r => r.data).catch(() => null),
+        axios.get(`${backendBase}/activities`).then(r => r.data).catch(() => []),
       ]);
       setUser(u && u.name ? u : null);
       setActivities(Array.isArray(a) ? a : []);
     } catch (err) {
-      console.error(err);
+      console.error("Dashboard load error:", err);
     } finally {
       setLoading(false);
     }
@@ -28,7 +32,7 @@ export default function Dashboard({ refreshKey = 0, onProcessed = () => {} }) {
 
   const processActivity = async (id) => {
     try {
-      const res = await axios.post(`/activities/process/${id}`);
+      const res = await axios.post(`${backendBase}/activities/process/${id}`);
       alert(JSON.stringify(res.data));
       onProcessed();
     } catch (err) {
