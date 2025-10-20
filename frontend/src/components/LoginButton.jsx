@@ -1,40 +1,44 @@
-import React from "react";
+import React, { useEffect } from "react";
 
 export default function LoginButton({ onLoginComplete = () => {} }) {
-  // Öffne Backend-Login direkt (Backend leitet dann zu Strava weiter).
-  const onLogin = () => {
-    // öffne direkt das Backend (nicht die Frontend-URL)
-    const url = "http://localhost:8000/auth/login";
-    const popup = window.open(url, "strava_oauth", "width=600,height=700");
-    if (!popup) {
-      // Popup geblockt -> normale Navigation
-      window.location.href = url;
-      return;
-    }
+	// Öffne Backend-Login direkt (Backend leitet dann zu Strava weiter).
+	const onLogin = () => {
+		// backend base: VITE_API_BASE_URL (build time) oder runtime origin
+		const backendBase = (import.meta.env.VITE_API_BASE_URL || window.location.origin).replace(/\/$/, "");
+		const url = `${backendBase}/auth/login`;
+		const popup = window.open(url, "strava_oauth", "width=600,height=700");
+		if (!popup) {
+			// Popup geblockt -> normale Navigation
+			window.location.href = url;
+			return;
+		}
+		// optional: focus popup
+		try { popup.focus(); } catch (e) {}
+	};
 
-    // Polling: wenn Popup geschlossen wird, löse callback aus
-    const checkInterval = 500;
-    let elapsed = 0;
-    const maxWait = 120000; // 2 Minuten fallback
-    const timer = setInterval(() => {
-      try {
-        if (popup.closed) {
-          clearInterval(timer);
-          onLoginComplete();
-        }
-      } catch (e) {
-        // cross-origin reads können fehlschlagen; ignorieren
-      }
-      elapsed += checkInterval;
-      if (elapsed >= maxWait) {
-        clearInterval(timer);
-        try {
-          popup.close();
-        } catch {}
-        onLoginComplete();
-      }
-    }, checkInterval);
-  };
+	// Handle postMessage from auth popup (auth callback posts a message)
+	useEffect(() => {
+		function onMessage(e) {
+			try {
+				const data = e?.data;
+				if (!data || typeof data !== "object") return;
+				if (data.type === "strava_auth_complete") {
+					// notify parent (refresh UI, etc.)
+					if (data.success) {
+						onLoginComplete(data.user || null);
+					}
+				}
+			} catch (err) {
+				// ignore malformed messages
+			}
+		}
+		window.addEventListener("message", onMessage, false);
+		return () => window.removeEventListener("message", onMessage, false);
+	}, [onLoginComplete]);
 
-  return <button onClick={onLogin}>Mit Strava einloggen</button>;
+	return (
+		<button onClick={onLogin} aria-label="Login with Strava">
+			Login with Strava
+		</button>
+	);
 }
