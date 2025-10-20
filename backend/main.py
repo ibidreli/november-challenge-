@@ -12,6 +12,8 @@ from routes.activities import router as activities_router
 from routes.users import router as users_router
 from routes.strava_webhook import router as strava_webhook_router
 from urllib.parse import urlparse
+import os
+import logging
 
 
 
@@ -114,3 +116,58 @@ def admin_create_db():
     """
     ok, msg = try_create_missing_database()
     return {"ok": ok, "message": msg}
+
+
+@app.on_event("startup")
+def _startup_log():
+    # Log useful masked info at startup so you can check service logs in Render
+    def _mask_netloc(netloc: str) -> str:
+        if "@" in netloc and ":" in netloc.split("@")[0]:
+            userinfo, hostinfo = netloc.split("@", 1)
+            user = userinfo.split(":", 1)[0]
+            return f"{user}:***@{hostinfo}"
+        return netloc
+    try:
+        p = urlparse(DATABASE_URL or "")
+        db_masked = f"{p.scheme}://{_mask_netloc(p.netloc)}{p.path}"
+    except Exception:
+        db_masked = "(invalid DATABASE_URL)"
+    env_redirect = os.getenv("STRAVA_REDIRECT_URI", "")
+    used_redirect = env_redirect if env_redirect.strip() and not env_redirect.strip().lower().startswith((
+        "http://localhost", "https://localhost", "http://127.0.0.1", "https://127.0.0.1"
+    )) else None
+    logging.info("Startup config: STRAVA_REDIRECT_URI(env)=%s, used_redirect(base)=%s, DATABASE_URL=%s",
+                 "(set)" if env_redirect else "(not set)", used_redirect or "(will use request base_url)", db_masked)
+
+
+# New global debug config endpoint (also available at /auth/debug/config)
+@app.get("/debug/config")
+@app.get("/auth/debug/config")
+def debug_config(request: Request):
+    def _mask_url(u: str) -> str:
+        if not u:
+            return "(not set)"
+        try:
+            if "@" in u and ":" in u.split("@")[0]:
+                userinfo, hostinfo = u.split("@", 1)
+                user = userinfo.split(":", 1)[0]
+                return f"{user}:***@{hostinfo}"
+        except Exception:
+            pass
+        return u if len(u) < 120 else u[:80] + "..."
+
+    env_redirect = os.getenv("STRAVA_REDIRECT_URI", "")
+    if env_redirect.strip() and not env_redirect.strip().lower().startswith((
+        "http://localhost", "https://localhost", "http://127.0.0.1", "https://127.0.0.1"
+    )):
+        used_redirect = env_redirect
+    else:
+        used_redirect = str(request.base_url).rstrip("/") + "/auth/callback"
+
+    return {
+        "used_redirect_uri": used_redirect,
+        "env_STRAVA_REDIRECT_URI_masked": _mask_url(env_redirect),
+        "STRAVA_CLIENT_ID_set": bool(os.getenv("STRAVA_CLIENT_ID")),
+        "DATABASE_URL_masked": _mask_url(os.getenv("DATABASE_URL", "")),
+        "notes": "If this endpoint 404s too, the backend process is not reachable or failed to start — check Render service logs."
+    }
