@@ -7,9 +7,11 @@ export default function Dashboard({ refreshKey = 0, onProcessed = () => {} }) {
   const [loading, setLoading] = useState(false);
 
   // prefer build-time VITE_API_BASE_URL, otherwise fall back to the known backend host
-  // ensure the URL contains a scheme (force https when missing) to avoid Mixed Content errors
+  // ensure a scheme is present and always use HTTPS (upgrade http:// to https://) to avoid Mixed Content
   let backendBase = (import.meta.env.VITE_API_BASE_URL || "https://november-challenge.onrender.com")?.toString().trim() || "";
   if (!/^https?:\/\//i.test(backendBase)) backendBase = "https://" + backendBase;
+  // if someone set http:// explicitly, upgrade to https://
+  backendBase = backendBase.replace(/^http:\/\//i, "https://");
   backendBase = backendBase.replace(/\/$/, "");
 
   const load = async () => {
