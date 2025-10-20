@@ -49,6 +49,61 @@ def _port_invalid(s: str) -> bool:
     except Exception:
         return True
 
+# convert Render internal database URLs to external URLs
+def _convert_render_internal_to_external(url: str) -> str:
+    """
+    Render provides both internal and external database URLs:
+    - Internal: postgresql://user:pass@dpg-xxxxx-a/dbname (only works within Render)
+    - External: postgresql://user:pass@dpg-xxxxx-a.oregon-postgres.render.com/dbname
+    
+    This function detects internal Render URLs and converts them to external ones.
+    Returns the converted URL or original URL if not a Render internal URL.
+    """
+    try:
+        p = urlparse(url)
+        # Check if it's a postgres URL with a Render internal hostname pattern
+        if p.scheme and p.scheme.startswith("postgres") and p.hostname:
+            host = p.hostname
+            # Render internal hostnames match pattern: dpg-*-a (without domain suffix)
+            # and don't already have the render.com domain
+            if (host.startswith("dpg-") and host.endswith("-a") and 
+                "render.com" not in host and "." not in host):
+                # Convert to external URL by adding the region and render.com domain
+                # Default to oregon-postgres region (most common)
+                external_host = f"{host}.oregon-postgres.render.com"
+                
+                # Rebuild the URL with the external hostname
+                auth = ""
+                if p.username:
+                    auth = p.username
+                    if p.password:
+                        auth += ":" + p.password
+                    auth += "@"
+                port_part = f":{p.port}" if p.port else ""
+                external_url = f"{p.scheme}://{auth}{external_host}{port_part}{p.path}"
+                
+                logging.warning(
+                    "Detected Render internal database URL. Converting to external URL for connectivity. "
+                    "Internal hostname: %s -> External hostname: %s. "
+                    "If using a different region, set DATABASE_URL with the full external hostname.",
+                    host, external_host
+                )
+                return external_url
+        return url
+    except Exception as e:
+        logging.debug("Error converting Render URL: %s", e)
+        return url
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+# If no DATABASE_URL provided, use sqlite fallback for local dev
+if not DATABASE_URL:
+    logging.warning("DATABASE_URL not set — falling back to local sqlite database (./dev.db).")
+    DATABASE_URL = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'dev.db')}"
+else:
+    # Convert Render internal URLs to external URLs for proper connectivity
+    DATABASE_URL = _convert_render_internal_to_external(DATABASE_URL)
+
 # If placeholders or invalid port detected, log and switch to sqlite fallback
 if _contains_placeholders(DATABASE_URL) or _port_invalid(DATABASE_URL):
     logging.warning(
