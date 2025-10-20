@@ -28,18 +28,20 @@ def build_strava_auth_url(request: Request | None = None):
     client_id = os.getenv("STRAVA_CLIENT_ID")
     redirect_uri_env = os.getenv("STRAVA_REDIRECT_URI") or ""
 
-    # Prefer explicit environment variable (Render). Warn if it points to localhost.
-    if redirect_uri_env.strip():
-        if "localhost" in redirect_uri_env or "127.0.0.1" in redirect_uri_env:
-            logging.warning("STRAVA_REDIRECT_URI contains localhost/127.0.0.1 — this will redirect users to your local machine. Set STRAVA_REDIRECT_URI to your public Render domain.")
+    # Treat localhost/127.0.0.1 values as invalid in production and ignore them.
+    if redirect_uri_env.strip() and not ("localhost" in redirect_uri_env or "127.0.0.1" in redirect_uri_env):
         redirect_uri = redirect_uri_env
-    elif request is not None:
-        # build redirect from current request base (keeps https when using ngrok / public domain)
-        redirect_uri = str(request.base_url).rstrip("/") + "/auth/callback"
     else:
-        # No env and no request base -> log error and return an empty URL (login will handle invalid config)
-        logging.error("No STRAVA_REDIRECT_URI env set and no request base available to build redirect_uri.")
-        redirect_uri = ""
+        if redirect_uri_env.strip():
+            # warn that an invalid localhost value was present and is being ignored
+            logging.warning("Ignoring STRAVA_REDIRECT_URI because it points to localhost/127.0.0.1. Will use request base_url instead.")
+        if request is not None:
+            # build redirect from current request base (keeps https when using ngrok / public domain)
+            redirect_uri = str(request.base_url).rstrip("/") + "/auth/callback"
+        else:
+            # no env and no request -> cannot build a usable redirect
+            logging.error("No valid STRAVA_REDIRECT_URI env and no request base available to build redirect_uri.")
+            redirect_uri = ""
 
     scope = os.getenv("STRAVA_SCOPE", "read,activity:read_all")
     params = {
@@ -51,6 +53,9 @@ def build_strava_auth_url(request: Request | None = None):
     }
     # debug log which redirect_uri will be used (helps diagnose localhost redirects)
     logging.info("build_strava_auth_url -> using redirect_uri: %s", redirect_uri)
+    # If redirect_uri is empty, return empty string so caller can handle the error cleanly
+    if not redirect_uri:
+        return ""
     return "https://www.strava.com/oauth/authorize?" + urlencode(params)
 
 
@@ -215,6 +220,21 @@ async def login(request: Request):
 
     # build auth url using the incoming request (so ngrok/public host is used if present)
     auth_url = build_strava_auth_url(request)
+
+    # If we couldn't build a valid redirect (empty auth_url), show explanatory page
+    if not auth_url:
+        html = f"""
+        <!doctype html><html><head><meta charset="utf-8"><title>Strava Redirect Konfiguration</title></head>
+        <body style="font-family:Arial,sans-serif;padding:20px">
+          <h2>Ungültige STRAVA_REDIRECT_URI</h2>
+          <p>Der Server kann keine gültige Redirect‑URL für Strava ermitteln.</p>
+          <p>Prüfe die Umgebungsvariable <code>STRAVA_REDIRECT_URI</code> in Render — sie darf nicht auf <code>localhost</code> verweisen und muss auf:</p>
+          <pre>https://november-challenge-1.onrender.com/auth/callback</pre>
+          <p>Nach der Anpassung neu deployen.</p>
+        </body></html>
+        """
+        return HTMLResponse(content=html, status_code=500)
+
     accept = (request.headers.get("accept") or "").lower()
     xreq = request.headers.get("x-requested-with") or ""
     if "application/json" in accept or xreq.lower() == "xmlhttprequest":
