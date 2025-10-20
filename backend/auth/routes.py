@@ -7,7 +7,7 @@ from urllib.parse import urlencode
 # added imports
 import requests
 from sqlalchemy.orm import Session
-from database import get_db
+from database import get_db  # ensure get_db available for debug route
 from models.user import User
 import logging
 import traceback
@@ -45,6 +45,8 @@ def build_strava_auth_url(request: Request | None = None):
         "approval_prompt": "auto",
         "scope": scope,
     }
+    # debug log which redirect_uri will be used (helps diagnose localhost redirects)
+    logging.info("build_strava_auth_url -> using redirect_uri: %s", redirect_uri)
     return "https://www.strava.com/oauth/authorize?" + urlencode(params)
 
 
@@ -403,3 +405,40 @@ async def callback(code: str | None = None, state: str | None = None, db: Sessio
     </html>
     """
     return HTMLResponse(content=html)
+
+
+# New debug endpoint to inspect runtime config (masked)
+@router.get("/debug/config")
+async def debug_auth_config(request: Request, db = Depends(get_db)):
+    """
+    Returns masked values for STRAVA_REDIRECT_URI and DATABASE_URL as seen by the running process.
+    Use this after deploy to verify the service actually has the correct env configured.
+    """
+    def _mask_url(u: str) -> str:
+        if not u:
+            return "(not set)"
+        try:
+            # simple mask for credentials in URLs like postgres://user:pass@host:port/db
+            if "@" in u and ":" in u.split("@")[0]:
+                userinfo, hostinfo = u.split("@", 1)
+                user = userinfo.split(":", 1)[0]
+                return f"{user}:***@{hostinfo}"
+        except Exception:
+            pass
+        return u if len(u) < 80 else u[:50] + "..." 
+
+    env_redirect = os.getenv("STRAVA_REDIRECT_URI", "")
+    if env_redirect.strip() and not env_redirect.strip().lower().startswith((
+        "http://localhost", "https://localhost", "http://127.0.0.1", "https://127.0.0.1"
+    )):
+        used_redirect = env_redirect
+    else:
+        used_redirect = str(request.base_url).rstrip("/") + "/auth/callback"
+
+    return {
+        "used_redirect_uri": used_redirect,
+        "env_STRAVA_REDIRECT_URI_masked": _mask_url(env_redirect),
+        "STRAVA_CLIENT_ID_set": bool(os.getenv("STRAVA_CLIENT_ID")),
+        "DATABASE_URL_masked": _mask_url(os.getenv("DATABASE_URL", "")),
+        "notes": "If used_redirect_uri contains localhost, set STRAVA_REDIRECT_URI to your Render domain in the service env vars."
+    }

@@ -19,6 +19,14 @@ if not DATABASE_URL:
     logging.warning("DATABASE_URL not set — falling back to local sqlite database (./dev.db).")
     DATABASE_URL = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'dev.db')}"
 
+# Warn if DATABASE_URL points to localhost (common deploy mistake)
+if isinstance(DATABASE_URL, str) and ("localhost" in DATABASE_URL or "127.0.0.1" in DATABASE_URL):
+    logging.warning(
+        "Detected DATABASE_URL pointing to localhost/127.0.0.1. "
+        "When deploying to Render (oder einen anderen Host), set DATABASE_URL to the managed Postgres URL provided by the platform. "
+        "A localhost DB is not reachable from the cloud service and will cause connection failures."
+    )
+
 # detect obvious placeholders like <DB_PORT> or any <...> tokens
 def _contains_placeholders(s: str) -> bool:
     return "<" in s or ">" in s or s.strip() == "" or s.strip().startswith("<") 
