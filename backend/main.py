@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 import os
 import logging
 import traceback
+from fastapi.responses import JSONResponse, HTMLResponse
+from urllib.parse import urlparse
 
 
 
@@ -63,6 +65,44 @@ else:
 	def debug_nodb():
 		# return the traceback (text) so you can copy/paste it — mask secrets in logs manually before sharing
 		return {"db_import_error": DB_IMPORT_ERROR or "(no traceback captured)"}
+
+	# --- NEW: friendly fallback endpoints so frontend calls don't get 404 ---
+
+	@app.get("/users/me")
+	def fallback_users_me():
+		# Called by frontend; return 503 with clear instructions instead of 404.
+		return JSONResponse(
+			status_code=503,
+			content={
+				"error": "service_unavailable",
+				"reason": "DB or router import failed on startup",
+				"hint": "Check /debug/nodb and service logs in Render for the full traceback"
+			}
+		)
+
+	@app.get("/activities")
+	def fallback_activities():
+		return JSONResponse(
+			status_code=503,
+			content={
+				"error": "service_unavailable",
+				"reason": "Activities router unavailable because DB/import failed",
+				"hint": "Check /debug/nodb and Render logs"
+			}
+		)
+
+	@app.get("/auth/login")
+	def fallback_auth_login():
+		# Provide an informative HTML page for browser attempts to login
+		html = f"""
+		<!doctype html><html><head><meta charset="utf-8"><title>Service nicht verfügbar</title></head>
+		<body style="font-family:Arial,sans-serif;padding:20px">
+		  <h2>Service vorübergehend nicht verfügbar</h2>
+		  <p>Der Auth‑Login ist derzeit nicht verfügbar, weil beim Start der Anwendung ein Fehler aufgetreten ist.</p>
+		  <p>Prüfe das Debug‑Endpoint: <a href="/debug/nodb">/debug/nodb</a> (zeigt Traceback) und die Service‑Logs in Render.</p>
+		</body></html>
+		"""
+		return HTMLResponse(content=html, status_code=503)
 
 
 @app.get("/")
