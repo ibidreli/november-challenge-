@@ -5,25 +5,38 @@
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from database import SessionLocal, engine, Base, get_db, ensure_slots_column, ensure_strava_id_column_type, DATABASE_URL, try_create_missing_database
-from models import user, activity, claim
-from auth.routes import router as auth_router
-from routes.activities import router as activities_router
-from routes.users import router as users_router
-from routes.strava_webhook import router as strava_webhook_router
-from urllib.parse import urlparse
 import os
 import logging
+import traceback
 
 
 
-Base.metadata.create_all(bind=engine)
-
-# ensure legacy DB that lacked 'slots' gets the column added
-ensure_slots_column(engine)
-
-# ensure strava_id column has integer type in Postgres (auto-convert if safe)
-ensure_strava_id_column_type(engine)
+# NEW: attempt to import heavy DB/mods/routers, but don't fail app startup on exceptions
+DB_IMPORT_ERROR = None
+DB_AVAILABLE = False
+try:
+	# try normal imports (may raise)
+	from database import SessionLocal, engine, Base, get_db, ensure_slots_column, ensure_strava_id_column_type, DATABASE_URL, try_create_missing_database
+	from models import user, activity, claim
+	from auth.routes import router as auth_router
+	from routes.activities import router as activities_router
+	from routes.users import router as users_router
+	from routes.strava_webhook import router as strava_webhook_router
+	# perform DB migrations / init that may raise
+	Base.metadata.create_all(bind=engine)
+	ensure_slots_column(engine)
+	ensure_strava_id_column_type(engine)
+	DB_AVAILABLE = True
+except Exception as e:
+	DB_IMPORT_ERROR = traceback.format_exc()
+	logging.exception("Database/Router import failed at startup: %s", e)
+	# define minimal placeholders so code below can reference names if needed
+	SessionLocal = None
+	engine = None
+	Base = None
+	get_db = None
+	DATABASE_URL = os.getenv("DATABASE_URL", "")
+	# routers left undefined when DB not available
 
 app = FastAPI(title="November Challenge API")
 
@@ -37,11 +50,19 @@ app.add_middleware(
 )
 
 
-# Routers
-app.include_router(auth_router, prefix="/auth", tags=["auth"])
-app.include_router(strava_webhook_router, prefix="/auth", tags=["auth"])  # <- webhook handler
-app.include_router(users_router, prefix="/users", tags=["users"])
-app.include_router(activities_router, prefix="/activities", tags=["activities"])
+# Routers: only include full routers if DB and router imports succeeded
+if DB_AVAILABLE:
+	# full app behavior
+	app.include_router(auth_router, prefix="/auth", tags=["auth"])
+	app.include_router(strava_webhook_router, prefix="/auth", tags=["auth"])  # <- webhook handler
+	app.include_router(users_router, prefix="/users", tags=["users"])
+	app.include_router(activities_router, prefix="/activities", tags=["activities"])
+else:
+	# fallback: minimal info for debugging when DB/imports failed
+	@app.get("/debug/nodb")
+	def debug_nodb():
+		# return the traceback (text) so you can copy/paste it — mask secrets in logs manually before sharing
+		return {"db_import_error": DB_IMPORT_ERROR or "(no traceback captured)"}
 
 
 @app.get("/")
@@ -136,8 +157,10 @@ def _startup_log():
     used_redirect = env_redirect if env_redirect.strip() and not env_redirect.strip().lower().startswith((
         "http://localhost", "https://localhost", "http://127.0.0.1", "https://127.0.0.1"
     )) else None
-    logging.info("Startup config: STRAVA_REDIRECT_URI(env)=%s, used_redirect(base)=%s, DATABASE_URL=%s",
-                 "(set)" if env_redirect else "(not set)", used_redirect or "(will use request base_url)", db_masked)
+    logging.info("Startup config: STRAVA_REDIRECT_URI(env)=%s, used_redirect(base)=%s, DATABASE_URL=%s, DB_AVAILABLE=%s",
+                 "(set)" if env_redirect else "(not set)", used_redirect or "(will use request base_url)", db_masked, DB_AVAILABLE)
+    if not DB_AVAILABLE:
+        logging.error("App started in fallback mode because DB/Router import failed. See /debug/nodb for traceback.")
 
 
 # New global debug config endpoint (also available at /auth/debug/config)
@@ -169,5 +192,6 @@ def debug_config(request: Request):
         "env_STRAVA_REDIRECT_URI_masked": _mask_url(env_redirect),
         "STRAVA_CLIENT_ID_set": bool(os.getenv("STRAVA_CLIENT_ID")),
         "DATABASE_URL_masked": _mask_url(os.getenv("DATABASE_URL", "")),
-        "notes": "If this endpoint 404s too, the backend process is not reachable or failed to start — check Render service logs."
+        "DB_AVAILABLE": DB_AVAILABLE,
+        "notes": "If DB_AVAILABLE is false, check /debug/nodb and your Render service logs."
     }
