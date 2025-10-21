@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import LoginButton from "./LoginButton";
 
-export default function Dashboard({ refreshKey = 0, onLoginComplete = () => {} }) {
+export default function Dashboard({ refreshKey = 0 }) {
   const [view, setView] = useState("personal"); // "personal" | "public"
   const [user, setUser] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // backend base: prefer VITE_API_BASE_URL at build time, else fallback to known host
+  // Backend base: prefer VITE_API_BASE_URL, otherwise known backend host.
+  // Force HTTPS to avoid mixed-content errors.
   let backendBase = (import.meta.env.VITE_API_BASE_URL || "https://november-challenge.onrender.com")?.toString().trim() || "";
   if (!/^https?:\/\//i.test(backendBase)) backendBase = "https://" + backendBase;
   backendBase = backendBase.replace(/^http:\/\//i, "https://").replace(/\/$/, "");
@@ -16,26 +16,22 @@ export default function Dashboard({ refreshKey = 0, onLoginComplete = () => {} }
   const load = async () => {
     setLoading(true);
     try {
-      const [u, lb] = await Promise.all([
-        axios.get(`${backendBase}/users/me`).then(r => r.data).catch(() => null),
-        axios.get(`${backendBase}/users`).then(r => r.data).catch(() => [])
-      ]);
-      setUser(u && u.name ? u : null);
-
-      // ensure leaderboard is an array; if empty but we have user, add user as fallback
+      // load public users list
+      const lb = await axios.get(`${backendBase}/users`).then(r => r.data).catch(() => []);
       const lbArr = Array.isArray(lb) ? lb : [];
-      if (lbArr.length === 0 && u && u.name) {
-        // transform user into leaderboard shape
-        const slots = Array.isArray(u.slots) ? u.slots.map(s => (s && typeof s === "object" && "km" in s ? Number(s.km) : (typeof s === "number" ? Number(s) : null))) : [];
-        lbArr.push({
-          id: u.id ?? 0,
-          name: u.name,
-          total_score: u.total_score ?? 0,
-          km_total: slots.reduce((s, v) => s + (v ? v : 0), 0),
-          slots: slots
-        });
-      }
       setLeaderboard(lbArr);
+
+      // determine logged-in user id from localStorage (set by LoginButton on postMessage)
+      let stored = null;
+      try { stored = localStorage.getItem("nc_user_id"); } catch (err) { stored = null; }
+      if (stored) {
+        const id = Number(stored);
+        const matched = lbArr.find(x => Number(x.id) === id);
+        setUser(matched && matched.name ? matched : null);
+      } else {
+        // no stored id -> not logged in for Personal view
+        setUser(null);
+      }
     } catch (err) {
       console.error("Dashboard load error:", err);
     } finally {
@@ -45,6 +41,12 @@ export default function Dashboard({ refreshKey = 0, onLoginComplete = () => {} }
 
   useEffect(() => {
     load();
+    // also re-run when localStorage possibly changed in other tabs
+    function onStorage(e) {
+      if (e.key === "nc_user_id") load();
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, [refreshKey]);
 
   // helpers
@@ -86,19 +88,24 @@ export default function Dashboard({ refreshKey = 0, onLoginComplete = () => {} }
   };
 
   return (
-    <div className="simple-dashboard" style={{ padding: 16 }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:16, flexWrap:"wrap" }}>
+    <div style={{ padding: 16 }}>
+      <div style={{ display: "flex", gap: 16, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
         <div>
-          <h1 style={{ margin:0 }}>November Challenge</h1>
-          <p style={{ margin:"6px 0 0", color:"#6b7280" }}>Persönliches Dashboard — Öffentliche Rangliste</p>
+          <h1 style={{ margin: 0 }}>November Challenge</h1>
+          <p style={{ margin: "6px 0 0", color: "#6b7280" }}>Persönliches Dashboard & Rangliste</p>
         </div>
-
-        <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-          <div className="tabs" role="tablist" aria-label="View selector">
-            <button className={`tab ${view==="personal" ? "active" : ""}`} onClick={() => setView("personal")}>Personal</button>
-            <button className={`tab ${view==="public" ? "active" : ""}`} onClick={() => setView("public")}>Public</button>
-          </div>
-          {/* single Login button in header already present; keep this small helper to refresh after login */}
+        <div>
+          {loading ? (
+            <div style={{ color: "#666" }}>Lädt…</div>
+          ) : user ? (
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontWeight: 700 }}>{user.name}</div>
+              <div style={{ color: "#444" }}>Score: {user.total_score ?? 0}</div>
+              <div style={{ color: "#444" }}>Monatliche km: {kmFromSlots(user.slots)}</div>
+            </div>
+          ) : (
+            <div style={{ color: "#666" }}>Nicht angemeldet — wechsle zum Tab "Personal" und verbinde dich mit Strava.</div>
+          )}
         </div>
       </div>
 
@@ -111,10 +118,9 @@ export default function Dashboard({ refreshKey = 0, onLoginComplete = () => {} }
             ) : !user ? (
               <div style={{ display:"flex", gap:12, alignItems:"center" }}>
                 <div style={{ flex:1 }}>
-                  <p>Bitte mit Strava verbinden, um deinen persönlichen Fortschritt zu sehen.</p>
+                  <p>Du bist nicht angemeldet. Bitte mit Strava verbinden, um deinen persönlichen Fortschritt zu sehen.</p>
                 </div>
                 <div>
-                  {/* removed duplicate Connect button here; header button exists */}
                   <a className="btn primary" href={`${backendBase}/auth/login`}>Connect with Strava</a>
                 </div>
               </div>

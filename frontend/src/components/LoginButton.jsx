@@ -27,7 +27,19 @@ export default function LoginButton({ onLoginComplete = () => {} }) {
 				if (!data || typeof data !== "object") return;
 				if (data.type === "strava_auth_complete") {
 					if (data.success) {
+						// persist current user id so frontend knows who is "logged in"
+						if (data.user && (data.user.id || data.user.id === 0)) {
+							try {
+								localStorage.setItem("nc_user_id", String(data.user.id));
+							} catch (err) {
+								// ignore storage errors
+							}
+						}
+						// notify parent to refresh UI
 						onLoginComplete(data.user || null);
+					} else {
+						// in case of failure clear stored id
+						try { localStorage.removeItem("nc_user_id"); } catch (err) {}
 					}
 				}
 			} catch (err) {

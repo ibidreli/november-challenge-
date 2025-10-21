@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import LoginButton from "./components/LoginButton";
 import Dashboard from "./components/Dashboard";
 import logo from "../logo/Logo.png"; // import logo from frontend/logo/Logo.png
 
@@ -19,9 +18,7 @@ export default function App() {
         <nav className="header-nav">
           <a>Dashboard</a> {/* keep only Dashboard nav */}
         </nav>
-        <div className="header-right">
-          <LoginButton onLoginComplete={() => setRefreshKey(k => k + 1)} />
-        </div>
+        {/* header-right removed to avoid duplicate Connect button */}
       </header>
 
       <main className="container" style={{ marginTop: 20 }}>
