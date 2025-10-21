@@ -264,7 +264,7 @@ async def login(request: Request):
 
 
 @router.get("/callback")
-async def callback(code: str | None = None, state: str | None = None, db: Session = Depends(get_db)):
+async def callback(request: Request, code: str | None = None, state: str | None = None, db: Session = Depends(get_db)):
     """
     Demo-callback:
     - tauscht 'code' gegen Strava-Tokens
@@ -273,17 +273,33 @@ async def callback(code: str | None = None, state: str | None = None, db: Sessio
     """
     if not code:
         payload = {"type": "strava_auth_complete", "success": False, "error": "no_code"}
+        # determine a frontend landing URL (env FRONTEND_URL preferred, else referer, else "/")
+        frontend_url = os.getenv("FRONTEND_URL", "").strip() or request.headers.get("referer", "").split("?")[0] or "/"
         html = f"""
         <!doctype html>
         <html>
           <head><meta charset="utf-8" /></head>
           <body>
-            <p>No code returned by Strava. This window will close.</p>
+            <p>No code returned by Strava.</p>
+            <p><a id="return" href="{frontend_url}">Zurück zur App</a></p>
             <script>
-              try {{
-                window.opener && window.opener.postMessage({payload!r}, "*");
-              }} catch(e){{}}
-              setTimeout(()=>window.close(), 800);
+              (function(){
+                var payload = {payload!r};
+                try {{
+                  if (window.opener && !window.opener.closed) {{
+                    window.opener.postMessage(payload, "*");
+                    window.close();
+                    return;
+                  }}
+                }} catch(e){{}}
+                // fallback: navigate to frontend (adds a query param to indicate status)
+                try {{
+                  var target = "{frontend_url}";
+                  if (target) {{
+                    window.location.href = target + (target.indexOf('?')>-1 ? '&' : '?') + 'auth=failed';
+                  }}
+                }} catch(e){{}}
+              })();
             </script>
           </body>
         </html>
@@ -434,17 +450,33 @@ async def callback(code: str | None = None, state: str | None = None, db: Sessio
 
     # success -> inform opener with basic user info
     payload = {"type": "strava_auth_complete", "success": True, "user": {"id": user.id, "name": user.name, "strava_id": user.strava_id}}
+    frontend_url = os.getenv("FRONTEND_URL", "").strip() or request.headers.get("referer", "").split("?")[0] or "/"
     html = f"""
     <!doctype html>
     <html>
       <head><meta charset="utf-8" /></head>
       <body>
         <p>Authentication complete. This window will close.</p>
+        <p>If the window does not close automatically, <a id="return" href="{frontend_url}">click here to return to the app</a>.</p>
         <script>
-          try {{
-            window.opener && window.opener.postMessage({payload!r}, "*");
-          }} catch(e){{}}
-          setTimeout(()=>window.close(), 800);
+          (function(){
+            var payload = {payload!r};
+            try {{
+              if (window.opener && !window.opener.closed) {{
+                window.opener.postMessage(payload, "*");
+                // attempt close; some browsers block close if not opened by script,
+                // but when opener exists it should work.
+                try {{ window.close(); return; }} catch(e){{/* ignored */}}
+              }}
+            }} catch(e){{}}
+            // not in a popup or couldn't close -> redirect top window to frontend with status
+            try {{
+              var target = "{frontend_url}";
+              if (target) {{
+                window.location.href = target + (target.indexOf('?')>-1 ? '&' : '?') + 'auth=complete';
+              }}
+            }} catch(e){{}}
+          })();
         </script>
       </body>
     </html>
