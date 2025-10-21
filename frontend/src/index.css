@@ -49,6 +49,43 @@ button { padding:8px 14px; margin:4px; cursor:pointer; border-radius:6px; border
 
 .no-user{ color:#7c7c7c; }
 
+/* Mini-grid for compact per-user progress (30 tiny squares) */
+.mini-grid {
+  display: grid;
+  grid-template-columns: repeat(30, 8px); /* default: 30 in a row */
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+}
+.mini-cell {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: #f3f4f6; /* empty */
+  box-shadow: inset 0 -1px 0 rgba(255,255,255,0.6);
+}
+.mini-cell.mini-filled {
+  background: linear-gradient(180deg,#34d399,#059669); /* filled runs */
+  box-shadow: 0 2px 6px rgba(3,105,161,0.08);
+}
+.mini-cell.mini-empty {
+  background: #e6e6e6;
+}
+
+/* Responsive adjustments: on small screens show grid in multiple rows */
+@media (max-width: 760px) {
+  .mini-grid {
+    grid-template-columns: repeat(15, 8px); /* 2 rows of 15 */
+  }
+}
+@media (max-width: 420px) {
+  .mini-grid {
+    grid-template-columns: repeat(10, 7px); /* 3 rows of 10 */
+    gap: 3px;
+  }
+  .mini-cell { width:7px; height:7px; border-radius:1px; }
+}
+
 /* Responsive */
 @media (max-width: 900px){
   .dashboard-body{ flex-direction:column; }

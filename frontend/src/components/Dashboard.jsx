@@ -3,6 +3,7 @@ import axios from "axios";
 
 export default function Dashboard({ refreshKey = 0 }) {
   const [user, setUser] = useState(null);
+  const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(false);
 
   // Backend base: prefer VITE_API_BASE_URL, otherwise known backend host.
@@ -14,8 +15,12 @@ export default function Dashboard({ refreshKey = 0 }) {
   const load = async () => {
     setLoading(true);
     try {
-      const u = await axios.get(`${backendBase}/users/me`, { timeout: 8000 }).then(r => r.data).catch(() => null);
+      const [u, lb] = await Promise.all([
+        axios.get(`${backendBase}/users/me`).then(r => r.data).catch(() => null),
+        axios.get(`${backendBase}/users`).then(r => r.data).catch(() => [])
+      ]);
       setUser(u && u.name ? u : null);
+      setLeaderboard(Array.isArray(lb) ? lb : []);
     } catch (err) {
       console.error("Dashboard load error:", err);
     } finally {
@@ -27,98 +32,87 @@ export default function Dashboard({ refreshKey = 0 }) {
     load();
   }, [refreshKey]);
 
-  // --- small UI components inside this file (keeps repo small) ---
-  const UserSummaryCard = ({ user }) => {
-    const initials = (user && user.name) ? user.name.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase() : "NA";
-    return (
-      <div className="ucard">
-        <div className="ucard-left">
-          <div className="avatar-large">{initials}</div>
-        </div>
-        <div className="ucard-right">
-          <h3>{user.name}</h3>
-          <div className="meta">
-            <div><strong>{user.total_score ?? 0}</strong> points</div>
-            <div style={{marginLeft: 12}}><strong>{(user.slots||[]).reduce((s,slot)=>s + (slot && slot.km ? slot.km : 0), 0)}</strong> km</div>
-          </div>
-          <div style={{marginTop:8}}>
-            <button className="btn small">View activities</button>
-          </div>
-        </div>
-      </div>
-    );
+  // helper to compute km from slots (if frontend only)
+  const kmFromSlots = (slots) => {
+    if (!Array.isArray(slots)) return 0;
+    return slots.reduce((sum, s) => sum + (s ? Number(s) : 0), 0);
   };
 
-  // MonthGrid: 30 tiles for the challenge month
-  const MonthGrid = ({ user }) => {
-    const slots = (user && user.slots) ? user.slots : new Array(30).fill(null);
-    const days = Array.from({length: 30}, (_,i) => i+1);
+  // MiniGrid component (very small squares)
+  const MiniGrid = ({ slots }) => {
+    // normalize to length 30
+    const arr = Array.isArray(slots) ? slots.slice(0,30).concat(Array(30 - Math.min(30, slots.length)).fill(null)) : Array(30).fill(null);
     return (
-      <div className="month-grid">
-        {days.map(day => {
-          const slot = slots[day-1];
-          const has = !!slot;
-          const km = has ? slot.km : null;
-          const longRun = km && km >= 10;
-          return (
-            <div key={day} className={`day-tile ${has ? "active" : ""} ${longRun ? "long" : ""}`} title={has ? `${km} km` : `Day ${day}`}>
-              <div className="day-number">{day}</div>
-              {has && <div className="km-pill">{km} km</div>}
-            </div>
-          );
-        })}
+      <div className="mini-grid" aria-hidden="true">
+        {arr.map((s, i) => (
+          <div key={i} className={`mini-cell ${s ? "mini-filled" : "mini-empty"}`} />
+        ))}
       </div>
     );
   };
 
   return (
-    <div className="dashboard-root">
-      <div className="dashboard-top">
-        <div className="title-block">
-          <h2>November Challenge</h2>
-          <p className="muted">Your monthly progress and slots overview</p>
+    <div style={{ padding: 16 }}>
+      <div style={{ display: "flex", gap: 16, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
+        <div>
+          <h1 style={{ margin: 0 }}>November Challenge</h1>
+          <p style={{ margin: "6px 0 0", color: "#6b7280" }}>Persönliches Dashboard & Rangliste</p>
         </div>
-        <div className="user-block">
-          {loading && <div>Loading…</div>}
-          {!loading && user && <UserSummaryCard user={user} />}
-          {!loading && !user && <div className="no-user">Kein Benutzer angemeldet — bitte mit Strava verbinden.</div>}
+        <div>
+          {loading ? (
+            <div style={{ color: "#666" }}>Lädt…</div>
+          ) : user ? (
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontWeight: 700 }}>{user.name}</div>
+              <div style={{ color: "#444" }}>Score: {user.total_score ?? 0}</div>
+              <div style={{ color: "#444" }}>Monatliche km: {kmFromSlots(user.slots)}</div>
+            </div>
+          ) : (
+            <div style={{ color: "#666" }}>Nicht verbunden — bitte Strava verbinden</div>
+          )}
         </div>
       </div>
 
-      <div className="dashboard-body">
-        <div className="left-panel">
-          <div className="panel-card">
-            <h4>Participant</h4>
-            {user ? (
-              <div style={{display:"flex", alignItems:"center", gap:12}}>
-                <div className="avatar">{(user.name||"").split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase()}</div>
-                <div>
-                  <div style={{fontWeight:700}}>{user.name}</div>
-                  <div className="muted">Score: {user.total_score ?? 0}</div>
+      <section style={{ marginTop: 20 }}>
+        <h2 style={{ marginBottom: 8 }}>Rangliste</h2>
+        {leaderboard.length === 0 ? (
+          <div style={{ color: "#666" }}>Keine Teilnehmer gefunden.</div>
+        ) : (
+          <div style={{ display: "grid", gap: 8 }}>
+            {leaderboard.map((p, idx) => (
+              <div key={p.id} className="leader-row" style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: 10,
+                background: idx < 3 ? "#fef3c7" : "#fff",
+                borderRadius: 8,
+                border: "1px solid #eee",
+                boxShadow: "0 1px 4px rgba(10,10,10,0.03)"
+              }}>
+                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 8,
+                    background: "#00b3a6", color: "#fff", display: "flex",
+                    alignItems: "center", justifyContent: "center", fontWeight: 700
+                  }}>
+                    {String(p.name || "U").split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase()}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700 }}>{p.name}</div>
+                    <div style={{ fontSize: 13, color: "#666" }}>km: {p.km_total} • score: {p.total_score}</div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <MiniGrid slots={p.slots} />
+                  <div style={{ fontWeight: 700, fontSize: 16 }}>{idx+1}</div>
                 </div>
               </div>
-            ) : (
-              <div className="muted">No participant data</div>
-            )}
-            <div style={{marginTop:12}}>
-              <button className="btn">Leaderboard</button>
-              <button className="btn ghost" style={{marginLeft:8}}>Export CSV</button>
-            </div>
+            ))}
           </div>
-        </div>
-
-        <div className="right-panel">
-          <div className="panel-card">
-            <h4>Month Overview</h4>
-            <MonthGrid user={user} />
-            <div className="legend" style={{marginTop:10}}>
-              <span className="legend-item"><span className="legend-swatch"></span> No activity</span>
-              <span className="legend-item"><span className="legend-swatch active"></span> Run</span>
-              <span className="legend-item"><span className="legend-swatch long"></span> Long run (≥10 km)</span>
-            </div>
-          </div>
-        </div>
-      </div>
+        )}
+      </section>
     </div>
   );
 }

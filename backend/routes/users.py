@@ -23,6 +23,7 @@ def get_current_user(sync: bool = Query(False), db: Session = Depends(get_db)):
             pass
     user.ensure_slots()
     return {
+        "id": user.id,
         "name": user.name,
         "strava_id": user.strava_id,
         "total_score": user.total_score,
@@ -50,3 +51,35 @@ def sync_all_users(db: Session = Depends(get_db)):
         except Exception as e:
             summary.append({"user_id": u.id, "strava_id": u.strava_id, "error": str(e)})
     return {"synced": len(summary), "details": summary}
+
+
+# New: simple listing endpoint for leaderboard
+@router.get("/")
+def list_users(db: Session = Depends(get_db)):
+    users = db.query(User).all()
+    out = []
+    for u in users:
+        try:
+            u.ensure_slots()
+        except Exception:
+            pass
+        km_total = 0
+        slots_out = []
+        for s in (u.slots or []):
+            # normalize slot representation: either null or integer km
+            if isinstance(s, dict) and "km" in s and isinstance(s["km"], (int, float)):
+                km_val = int(s["km"])
+                km_total += km_val
+                slots_out.append(km_val)
+            else:
+                slots_out.append(None)
+        out.append({
+            "id": u.id,
+            "name": u.name,
+            "total_score": u.total_score or 0,
+            "km_total": km_total,
+            "slots": slots_out   # add slots for frontend mini-grid
+        })
+    # sort by score desc, fallback to km_total
+    out.sort(key=lambda x: (x["total_score"], x["km_total"]), reverse=True)
+    return out
