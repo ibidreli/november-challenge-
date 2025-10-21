@@ -107,11 +107,11 @@ export default function Dashboard({ refreshKey = 0 }) {
             {loading ? (
               <div style={{ color:"#666" }}>Lädt…</div>
             ) : !user ? (
-              <div style={{ display:"flex", gap:12, alignItems:"center" }}>
-                <div style={{ flex:1 }}>
+              <div className="not-logged">
+                <div className="not-logged-text">
                   <p>Du bist nicht angemeldet. Bitte mit Strava verbinden, um deinen persönlichen Fortschritt zu sehen.</p>
                 </div>
-                <div>
+                <div className="not-logged-action">
                   <a className="btn primary" href={`${backendBase}/auth/login`}>Connect with Strava</a>
                 </div>
               </div>

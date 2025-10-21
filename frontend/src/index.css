@@ -153,3 +153,26 @@ button { padding:8px 14px; margin:4px; cursor:pointer; border-radius:6px; border
   .header-nav { display:none; }
   .mini-grid { grid-template-columns: repeat(10, 7px); gap:3px; }
 }
+
+.not-logged {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.not-logged .not-logged-text { flex: 1; }
+.not-logged .not-logged-action { /* keeps natural size on desktop */ }
+
+/* Mobile: stack text above button and make button full width */
+@media (max-width: 520px) {
+  .not-logged {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .not-logged .not-logged-action {
+    margin-top: 8px;
+  }
+  .not-logged .not-logged-action .btn {
+    width: 100%;
+    display: inline-block;
+  }
+}
