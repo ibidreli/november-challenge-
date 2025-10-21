@@ -89,13 +89,12 @@ export default function Dashboard({ refreshKey = 0 }) {
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:16, flexWrap:"wrap" }}>
         <div>
           <h1 style={{ margin:0 }}>November Challenge</h1>
-          <p style={{ margin:"6px 0 0", color:"#6b7280" }}>Persönliches Dashboard — Öffentliche Rangliste</p>
         </div>
 
         <div style={{ display:"flex", gap:10, alignItems:"center" }}>
           <div className="tabs" role="tablist" aria-label="View selector">
-            <button className={`tab ${view==="personal" ? "active" : ""}`} onClick={() => setView("personal")}>Personal</button>
-            <button className={`tab ${view==="public" ? "active" : ""}`} onClick={() => setView("public")}>Public</button>
+            <button className={`tab ${view==="personal" ? "active" : ""}`} onClick={() => setView("personal")}>Deine Leistungen</button>
+            <button className={`tab ${view==="public" ? "active" : ""}`} onClick={() => setView("public")}>Rangliste</button>
           </div>
           {/* single Login button in header already present; keep this small helper to refresh after login */}
         </div>
@@ -121,8 +120,8 @@ export default function Dashboard({ refreshKey = 0 }) {
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap" }}>
                   <div>
                     <div style={{ fontWeight:700 }}>{user.name}</div>
-                    <div style={{ color:"#444" }}>Score: {user.total_score ?? 0}</div>
-                    <div style={{ color:"#444" }}>Monatliche km: {kmFromSlots(user.slots)}</div>
+                    <div style={{ color:"#444" }}>Punkte: {user.total_score ?? 0}</div>
+                    <div style={{ color:"#444" }}>Monatliche Kilometer: {kmFromSlots(user.slots)}</div>
                   </div>
                 </div>
 
