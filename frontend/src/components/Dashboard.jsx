@@ -1,14 +1,12 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import LoginButton from "./LoginButton";
 
-export default function Dashboard({ refreshKey = 0, onLoginComplete = () => {} }) {
-  const [view, setView] = useState("personal"); // "personal" | "public"
+export default function Dashboard({ refreshKey = 0 }) {
   const [user, setUser] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // backend base: prefer VITE_API_BASE_URL at build time, else fallback to known host
+  // backend base
   let backendBase = (import.meta.env.VITE_API_BASE_URL || "https://november-challenge.onrender.com")?.toString().trim() || "";
   if (!/^https?:\/\//i.test(backendBase)) backendBase = "https://" + backendBase;
   backendBase = backendBase.replace(/^http:\/\//i, "https://").replace(/\/$/, "");
@@ -22,10 +20,9 @@ export default function Dashboard({ refreshKey = 0, onLoginComplete = () => {} }
       ]);
       setUser(u && u.name ? u : null);
 
-      // ensure leaderboard is an array; if empty but we have user, add user as fallback
       const lbArr = Array.isArray(lb) ? lb : [];
+      // fallback: if no public users but user exists, show the user in leaderboard
       if (lbArr.length === 0 && u && u.name) {
-        // transform user into leaderboard shape
         const slots = Array.isArray(u.slots) ? u.slots.map(s => (s && typeof s === "object" && "km" in s ? Number(s.km) : (typeof s === "number" ? Number(s) : null))) : [];
         lbArr.push({
           id: u.id ?? 0,
@@ -43,11 +40,8 @@ export default function Dashboard({ refreshKey = 0, onLoginComplete = () => {} }
     }
   };
 
-  useEffect(() => {
-    load();
-  }, [refreshKey]);
+  useEffect(() => { load(); }, [refreshKey]);
 
-  // helpers
   const kmFromSlots = (slots) => {
     if (!Array.isArray(slots)) return 0;
     return slots.reduce((sum, s) => {
@@ -56,24 +50,6 @@ export default function Dashboard({ refreshKey = 0, onLoginComplete = () => {} }
       if (typeof s === "object" && s.km != null) return sum + Number(s.km);
       return sum;
     }, 0);
-  };
-
-  const PersonalGrid = ({ slots }) => {
-    const arr = Array.isArray(slots) ? slots.slice(0,30).concat(Array(30 - Math.min(30, slots.length)).fill(null)) : Array(30).fill(null);
-    return (
-      <div className="personal-grid" aria-hidden="true">
-        {arr.map((s, i) => {
-          const filled = !!s;
-          const km = filled ? (typeof s === "number" ? s : (s.km ?? "")) : null;
-          return (
-            <div key={i} className={`personal-cell ${filled ? "filled" : "empty"}`} title={filled ? `${km} km` : `Tag ${i+1}`}>
-              <div className="cell-day">{i+1}</div>
-              {filled ? <span className="cell-km">{km}</span> : null}
-            </div>
-          );
-        })}
-      </div>
-    );
   };
 
   const MiniGrid = ({ slots }) => {
@@ -86,89 +62,82 @@ export default function Dashboard({ refreshKey = 0, onLoginComplete = () => {} }
   };
 
   return (
-    <div className="simple-dashboard" style={{ padding: 16 }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:16, flexWrap:"wrap" }}>
-        <div>
-          <h1 style={{ margin:0 }}>November Challenge</h1>
-          <p style={{ margin:"6px 0 0", color:"#6b7280" }}>Persönliches Dashboard — Öffentliche Rangliste</p>
+    <div style={{ padding: 12 }}>
+      <div className="dashboard-columns">
+        {/* Left: Public leaderboard */}
+        <div className="col-left">
+          <h2 style={{ marginTop: 0, marginBottom: 8 }}>Öffentliche Rangliste</h2>
+          {loading ? (
+            <div style={{ color: "#666" }}>Lädt…</div>
+          ) : leaderboard.length === 0 ? (
+            <div style={{ color: "#666" }}>Keine Teilnehmer gefunden.</div>
+          ) : (
+            <div style={{ display: "grid", gap: 8 }}>
+              {leaderboard.map((p, idx) => (
+                <div key={p.id} className="leader-row" style={{
+                  display:"flex", justifyContent:"space-between", alignItems:"center", padding:10, borderRadius:8, border:"1px solid #eee",
+                  background: idx < 3 ? "#fffbeb" : "#fff"
+                }}>
+                  <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+                    <div style={{ width:36, height:36, borderRadius:8, background:"#00b3a6", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700 }}>
+                      {String(p.name||"U").split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight:700 }}>{p.name}</div>
+                      <div style={{ fontSize:13, color:"#666" }}>Punkte: {p.total_score} • km: {p.km_total}</div>
+                    </div>
+                  </div>
+
+                  <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+                    <MiniGrid slots={p.slots} />
+                    <div style={{ fontWeight:700, fontSize:16 }}>{idx+1}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-          <div className="tabs" role="tablist" aria-label="View selector">
-            <button className={`tab ${view==="personal" ? "active" : ""}`} onClick={() => setView("personal")}>Personal</button>
-            <button className={`tab ${view==="public" ? "active" : ""}`} onClick={() => setView("public")}>Public</button>
-          </div>
-          {/* single Login button in header already present; keep this small helper to refresh after login */}
-        </div>
-      </div>
+        {/* Right: Personal panel */}
+        <div className="col-right">
+          <h2 style={{ marginTop: 0, marginBottom: 8 }}>Persönlich</h2>
 
-      <div style={{ marginTop: 18 }}>
-        {view === "personal" && (
-          <div>
-            <h2 style={{ marginTop:0 }}>Meine Übersicht</h2>
-            {loading ? (
-              <div style={{ color:"#666" }}>Lädt…</div>
-            ) : !user ? (
-              <div style={{ display:"flex", gap:12, alignItems:"center" }}>
-                <div style={{ flex:1 }}>
-                  <p>Bitte mit Strava verbinden, um deinen persönlichen Fortschritt zu sehen.</p>
-                </div>
-                <div>
-                  {/* removed duplicate Connect button here; header button exists */}
-                  <a className="btn primary" href={`${backendBase}/auth/login`}>Connect with Strava</a>
-                </div>
+          {loading ? (
+            <div style={{ color:"#666" }}>Lädt…</div>
+          ) : !user ? (
+            <div className="panel-card" style={{ padding:12 }}>
+              <div style={{ fontWeight:700, marginBottom:6 }}>Nicht angemeldet</div>
+              <div style={{ color:"#666", marginBottom:10 }}>Du bist nicht verbunden oder wurdest noch nicht zum Challenge hinzugefügt.</div>
+              <a className="btn primary" href={`${backendBase}/auth/login`}>Mit Strava verbinden</a>
+            </div>
+          ) : (
+            <div className="panel-card" style={{ padding:12 }}>
+              <div style={{ fontWeight:700, fontSize:18 }}>{user.name}</div>
+              <div style={{ color:"#444", marginTop:6, marginBottom:8 }}>
+                Punkte: <strong>{user.total_score ?? 0}</strong>
               </div>
-            ) : (
+              <div style={{ color:"#666", marginBottom:12 }}>Monatliche km: {kmFromSlots(user.slots)}</div>
               <div>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap" }}>
-                  <div>
-                    <div style={{ fontWeight:700 }}>{user.name}</div>
-                    <div style={{ color:"#444" }}>Score: {user.total_score ?? 0}</div>
-                    <div style={{ color:"#444" }}>Monatliche km: {kmFromSlots(user.slots)}</div>
+                {/* Personal 30-day grid with day numbers */}
+                <div style={{ marginTop:6 }}>
+                  <div className="personal-grid">
+                    {Array.from({length:30}, (_,i) => {
+                      const s = Array.isArray(user.slots) ? user.slots[i] : null;
+                      const filled = !!s;
+                      const km = filled ? (typeof s === "number" ? s : (s.km ?? "")) : null;
+                      return (
+                        <div key={i} className={`personal-cell ${filled ? "filled" : "empty"}`} title={filled ? `${km} km` : `Tag ${i+1}`}>
+                          <div className="cell-day">{i+1}</div>
+                          {filled ? <div className="cell-km">{km}</div> : null}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-
-                <div style={{ marginTop:12 }}>
-                  <PersonalGrid slots={user.slots} />
-                </div>
               </div>
-            )}
-          </div>
-        )}
-
-        {view === "public" && (
-          <div>
-            <h2 style={{ marginTop:0 }}>Öffentliche Rangliste</h2>
-            {loading ? (
-              <div style={{ color:"#666" }}>Lädt…</div>
-            ) : leaderboard.length === 0 ? (
-              <div style={{ color:"#666" }}>Keine Teilnehmer gefunden.</div>
-            ) : (
-              <div style={{ display:"grid", gap:8 }}>
-                {leaderboard.map((p, idx) => (
-                  <div key={p.id} className="leader-row" style={{
-                    display:"flex", justifyContent:"space-between", alignItems:"center", padding:10, borderRadius:8, border:"1px solid #eee", background: idx<3 ? "#fffbeb" : "#fff"
-                  }}>
-                    <div style={{ display:"flex", gap:12, alignItems:"center" }}>
-                      <div style={{ width:36, height:36, borderRadius:8, background:"#00b3a6", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700 }}>
-                        {String(p.name||"U").split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase()}
-                      </div>
-                      <div>
-                        <div style={{ fontWeight:700 }}>{p.name}</div>
-                        <div style={{ fontSize:13, color:"#666" }}>km: {p.km_total} • score: {p.total_score}</div>
-                      </div>
-                    </div>
-
-                    <div style={{ display:"flex", gap:12, alignItems:"center" }}>
-                      <MiniGrid slots={p.slots} />
-                      <div style={{ fontWeight:700, fontSize:16 }}>{idx+1}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
