@@ -5,19 +5,6 @@ import logo from "../logo/Logo.png"; // import logo from frontend/logo/Logo.png
 
 export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
-  const [currentUser, setCurrentUser] = useState(null);
-
-  // called by LoginButton when OAuth finished (receives user object)
-  const handleLoginComplete = (user) => {
-    // store user and trigger dashboard refresh
-    setCurrentUser(user || null);
-    setRefreshKey((k) => k + 1);
-  };
-
-  // Called by Dashboard when it loads the current user (keeps header state consistent)
-  const handleUserChange = (user) => {
-    setCurrentUser(user || null);
-  };
 
   return (
     <div>
@@ -33,18 +20,12 @@ export default function App() {
           <a>Dashboard</a> {/* keep only Dashboard nav */}
         </nav>
         <div className="header-right">
-          {/* only show login button when not logged in */}
-          {!currentUser && (
-            <LoginButton onLoginComplete={handleLoginComplete} />
-          )}
+          <LoginButton onLoginComplete={() => setRefreshKey(k => k + 1)} />
         </div>
       </header>
 
       <main className="container" style={{ marginTop: 20 }}>
-        <Dashboard
-          refreshKey={refreshKey}
-          onUserChange={handleUserChange}
-        />
+        <Dashboard refreshKey={refreshKey} />
       </main>
     </div>
   );
