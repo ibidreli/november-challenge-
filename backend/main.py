@@ -36,7 +36,13 @@ except Exception as e:
 	SessionLocal = None
 	engine = None
 	Base = None
-	get_db = None
+	# provide a fallback dependency function so FastAPI's dependency analysis does not fail.
+	# When called at runtime this will return a clear 503 response.
+	from fastapi import HTTPException
+	def get_db():
+		# raising HTTPException here ensures endpoints using Depends(get_db) return 503
+		# instead of causing import/analysis errors at startup.
+		raise HTTPException(status_code=503, detail="Database not available (see /debug/nodb for details)")
 	DATABASE_URL = os.getenv("DATABASE_URL", "")
 	# routers left undefined when DB not available
 
