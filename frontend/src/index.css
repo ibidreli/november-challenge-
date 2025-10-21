@@ -119,10 +119,30 @@ button { padding:8px 14px; margin:4px; cursor:pointer; border-radius:6px; border
   justify-content:center;
   position:relative;
   transition: transform .08s ease;
+  overflow: hidden;
 }
 .personal-cell.filled { background: linear-gradient(180deg,#ecfdf5,#ccfbf1); border:1px solid #a7f3d0; }
 .personal-cell.filled:hover { transform: translateY(-4px); }
-.personal-cell .cell-km { font-weight:700; color:#065f46; font-size:13px; }
+
+/* day number (always visible) */
+.personal-cell .cell-day {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  font-weight:700;
+  color:#374151;
+  font-size:12px;
+}
+
+/* km shown when filled (bottom-right) */
+.personal-cell .cell-km {
+  position: absolute;
+  bottom: 6px;
+  right: 8px;
+  font-weight:700;
+  color:#065f46;
+  font-size:12px;
+}
 
 /* responsiveness */
 @media (max-width: 900px) {

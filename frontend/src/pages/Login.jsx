@@ -1,4 +1,6 @@
 import React from 'react';
+// logo located at frontend/logo/Logo.png (relative from src/pages -> ../../logo/...)
+import logo from '../../logo/Logo.png';
 
 export default function Login() {
 	// backend base: prefer VITE_API_BASE_URL at build time, else fallback host
@@ -7,8 +9,6 @@ export default function Login() {
 	if (!/^https?:\/\//i.test(backendBase)) backendBase = "https://" + backendBase;
 	backendBase = backendBase.replace(/^http:\/\//i, "https://");
 	backendBase = backendBase.replace(/\/$/, "");
-
-	const logo = "/logo.png";
 
 	return (
 		<div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight: "70vh" }}>

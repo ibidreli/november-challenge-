@@ -21,7 +21,21 @@ export default function Dashboard({ refreshKey = 0, onLoginComplete = () => {} }
         axios.get(`${backendBase}/users`).then(r => r.data).catch(() => [])
       ]);
       setUser(u && u.name ? u : null);
-      setLeaderboard(Array.isArray(lb) ? lb : []);
+
+      // ensure leaderboard is an array; if empty but we have user, add user as fallback
+      const lbArr = Array.isArray(lb) ? lb : [];
+      if (lbArr.length === 0 && u && u.name) {
+        // transform user into leaderboard shape
+        const slots = Array.isArray(u.slots) ? u.slots.map(s => (s && typeof s === "object" && "km" in s ? Number(s.km) : (typeof s === "number" ? Number(s) : null))) : [];
+        lbArr.push({
+          id: u.id ?? 0,
+          name: u.name,
+          total_score: u.total_score ?? 0,
+          km_total: slots.reduce((s, v) => s + (v ? v : 0), 0),
+          slots: slots
+        });
+      }
+      setLeaderboard(lbArr);
     } catch (err) {
       console.error("Dashboard load error:", err);
     } finally {
@@ -36,7 +50,12 @@ export default function Dashboard({ refreshKey = 0, onLoginComplete = () => {} }
   // helpers
   const kmFromSlots = (slots) => {
     if (!Array.isArray(slots)) return 0;
-    return slots.reduce((s, v) => s + (v ? Number(v) : 0), 0);
+    return slots.reduce((sum, s) => {
+      if (!s) return sum;
+      if (typeof s === "number") return sum + Number(s);
+      if (typeof s === "object" && s.km != null) return sum + Number(s.km);
+      return sum;
+    }, 0);
   };
 
   const PersonalGrid = ({ slots }) => {
@@ -47,7 +66,8 @@ export default function Dashboard({ refreshKey = 0, onLoginComplete = () => {} }
           const filled = !!s;
           const km = filled ? (typeof s === "number" ? s : (s.km ?? "")) : null;
           return (
-            <div key={i} className={`personal-cell ${filled ? "filled" : "empty"}`} title={filled ? `${km} km` : `Day ${i+1}`}>
+            <div key={i} className={`personal-cell ${filled ? "filled" : "empty"}`} title={filled ? `${km} km` : `Tag ${i+1}`}>
+              <div className="cell-day">{i+1}</div>
               {filled ? <span className="cell-km">{km}</span> : null}
             </div>
           );
@@ -70,7 +90,7 @@ export default function Dashboard({ refreshKey = 0, onLoginComplete = () => {} }
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:16, flexWrap:"wrap" }}>
         <div>
           <h1 style={{ margin:0 }}>November Challenge</h1>
-          <p style={{ margin:"6px 0 0", color:"#6b7280" }}>Persönliches Dashboard — Public Rangliste</p>
+          <p style={{ margin:"6px 0 0", color:"#6b7280" }}>Persönliches Dashboard — Öffentliche Rangliste</p>
         </div>
 
         <div style={{ display:"flex", gap:10, alignItems:"center" }}>
@@ -78,8 +98,7 @@ export default function Dashboard({ refreshKey = 0, onLoginComplete = () => {} }
             <button className={`tab ${view==="personal" ? "active" : ""}`} onClick={() => setView("personal")}>Personal</button>
             <button className={`tab ${view==="public" ? "active" : ""}`} onClick={() => setView("public")}>Public</button>
           </div>
-          {/* top-right login button (also available inside personal view) */}
-          <LoginButton onLoginComplete={() => { onLoginComplete(); load(); }} />
+          {/* single Login button in header already present; keep this small helper to refresh after login */}
         </div>
       </div>
 
@@ -95,7 +114,8 @@ export default function Dashboard({ refreshKey = 0, onLoginComplete = () => {} }
                   <p>Bitte mit Strava verbinden, um deinen persönlichen Fortschritt zu sehen.</p>
                 </div>
                 <div>
-                  <LoginButton onLoginComplete={() => { onLoginComplete(); load(); }} />
+                  {/* removed duplicate Connect button here; header button exists */}
+                  <a className="btn primary" href={`${backendBase}/auth/login`}>Connect with Strava</a>
                 </div>
               </div>
             ) : (
