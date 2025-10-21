@@ -39,8 +39,8 @@ export default function LoginButton({ onLoginComplete = () => {} }) {
 	}, [onLoginComplete]);
 
 	return (
-		<button onClick={onLogin} aria-label="Login with Strava">
-			Login with Strava
+		<button className="btn primary" onClick={onLogin} aria-label="Connect with Strava">
+			Connect with Strava
 		</button>
 	);
 }
