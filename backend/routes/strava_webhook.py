@@ -50,6 +50,9 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks, db
             background_tasks.add_task(fetch_and_process_activity, owner_id, object_id)
             return JSONResponse({"status": "scheduled_retry"})
         data = r.json()
+        # ignore non-Run activities
+        if (data.get("type") or "").lower() != "run":
+            return JSONResponse({"status": "ignored_non_run", "type": data.get("type")})
         distance_m = data.get("distance", 0)
         distance_km = (distance_m or 0) / 1000.0
         start = data.get("start_date_local") or data.get("start_date")
@@ -127,6 +130,10 @@ def fetch_and_process_activity(owner_id: int, object_id: int, attempts: int = 6,
                 r = requests.get(STRAVA_API_BASE + str(object_id), headers=headers, timeout=10)
                 if r.status_code == 200:
                     data = r.json()
+                    # ignore non-Run activities in background retry as well
+                    if (data.get("type") or "").lower() != "run":
+                        logging.debug("Background fetch: ignoring non-Run activity %s (type=%s)", object_id, data.get("type"))
+                        return
                     distance_m = data.get("distance", 0)
                     distance_km = (distance_m or 0) / 1000.0
                     start = data.get("start_date_local") or data.get("start_date")

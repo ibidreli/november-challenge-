@@ -117,6 +117,12 @@ def sync_recent_activities_from_strava(user: User, db: Session):
 				break
 			for a in activities:
 				try:
+					# --- nur Runs verarbeiten: überspringe Aktivitäten, die nicht vom Typ "Run" sind ---
+					# skip non-run activities
+					if (a.get("type") or "").lower() != "run":
+						logging.debug("Skipping non-Run activity from Strava import: id=%s, type=%s", a.get("id"), a.get("type"))
+						continue
+					
 					strava_aid = str(a.get("id"))
 					# skip if already stored
 					exists = db.query(ActivityModel).filter(ActivityModel.strava_id == strava_aid).first()

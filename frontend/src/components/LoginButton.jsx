@@ -3,10 +3,10 @@ import React, { useEffect } from "react";
 export default function LoginButton({ onLoginComplete = () => {} }) {
 	// Öffne Backend-Login direkt (Backend leitet dann zu Strava weiter).
 	const onLogin = () => {
-		// prefer VITE_API_BASE_URL, otherwise fall back to the known backend host
+		// prefer VITE_API_BASE_URL, otherwise fall back to known backend host; ensure HTTPS
 		let backendBase = (import.meta.env.VITE_API_BASE_URL || "https://november-challenge.onrender.com")?.toString().trim() || "";
+		// add scheme if missing, upgrade explicit http to https
 		if (!/^https?:\/\//i.test(backendBase)) backendBase = "https://" + backendBase;
-		// upgrade explicit http:// to https:// to avoid Mixed Content
 		backendBase = backendBase.replace(/^http:\/\//i, "https://");
 		backendBase = backendBase.replace(/\/$/, "");
 		const url = `${backendBase}/auth/login`;
@@ -16,7 +16,6 @@ export default function LoginButton({ onLoginComplete = () => {} }) {
 			window.location.href = url;
 			return;
 		}
-		// optional: focus popup
 		try { popup.focus(); } catch (e) {}
 	};
 
@@ -27,7 +26,6 @@ export default function LoginButton({ onLoginComplete = () => {} }) {
 				const data = e?.data;
 				if (!data || typeof data !== "object") return;
 				if (data.type === "strava_auth_complete") {
-					// notify parent (refresh UI, etc.)
 					if (data.success) {
 						onLoginComplete(data.user || null);
 					}

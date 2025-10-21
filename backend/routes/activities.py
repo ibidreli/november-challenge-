@@ -129,6 +129,9 @@ def process_by_strava(strava_activity_id: int, owner_strava_id: int | None = Non
         if r.status_code != 200:
             return {"status": "error_fetching_activity", "code": r.status_code, "text": r.text}
         data = r.json()
+        # ignore non-Run activities
+        if (data.get("type") or "").lower() != "run":
+            return {"status": "ignored_non_run", "type": data.get("type")}
         distance_m = data.get("distance", 0) or 0
         distance_km = float(distance_m) / 1000.0
         start = data.get("start_date_local") or data.get("start_date")
