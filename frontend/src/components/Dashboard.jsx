@@ -65,9 +65,9 @@ export default function Dashboard({ refreshKey = 0 }) {
           const filled = !!s;
           const km = filled ? (typeof s === "number" ? s : (s.km ?? "")) : null;
           return (
+            // show only the day number visually; tooltip still contains km info when available
             <div key={i} className={`personal-cell ${filled ? "filled" : "empty"}`} title={filled ? `${km} km` : `Tag ${i+1}`}>
               <div className="cell-day">{i+1}</div>
-              {filled ? <span className="cell-km">{km}</span> : null}
             </div>
           );
         })}
