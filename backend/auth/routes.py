@@ -25,23 +25,40 @@ CHALLENGE_MONTH = int(os.getenv("CHALLENGE_MONTH", "11"))
 
 
 def build_strava_auth_url(request: Request | None = None):
+    """
+    Build Strava auth URL.
+    Priority:
+      1) STRAVA_REDIRECT_URI env (if set and not pointing to localhost) — ensure https
+      2) Build from X-Forwarded-Proto + X-Forwarded-Host (or Host) from request — ensure https
+      3) Fallback to request.base_url
+    Returns empty string on failure.
+    """
     client_id = os.getenv("STRAVA_CLIENT_ID")
-    redirect_uri_env = os.getenv("STRAVA_REDIRECT_URI") or ""
+    redirect_uri_env = (os.getenv("STRAVA_REDIRECT_URI") or "").strip()
 
-    # Treat localhost/127.0.0.1 values as invalid in production and ignore them.
-    if redirect_uri_env.strip() and not ("localhost" in redirect_uri_env or "127.0.0.1" in redirect_uri_env):
+    # normalize env value: add https if missing
+    if redirect_uri_env and not redirect_uri_env.lower().startswith(("http://", "https://")):
+        redirect_uri_env = "https://" + redirect_uri_env
+
+    # prefer env when present and not localhost
+    redirect_uri = ""
+    if redirect_uri_env and not ("localhost" in redirect_uri_env or "127.0.0.1" in redirect_uri_env):
         redirect_uri = redirect_uri_env
     else:
-        if redirect_uri_env.strip():
-            # warn that an invalid localhost value was present and is being ignored
-            logging.warning("Ignoring STRAVA_REDIRECT_URI because it points to localhost/127.0.0.1. Will use request base_url instead.")
+        # build from forwarded headers when available (handles reverse proxies like Render)
         if request is not None:
-            # build redirect from current request base (keeps https when using ngrok / public domain)
-            redirect_uri = str(request.base_url).rstrip("/") + "/auth/callback"
-        else:
-            # no env and no request -> cannot build a usable redirect
-            logging.error("No valid STRAVA_REDIRECT_URI env and no request base available to build redirect_uri.")
-            redirect_uri = ""
+            proto = (request.headers.get("x-forwarded-proto") or request.url.scheme or "").lower()
+            host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc or ""
+            if proto and host:
+                if proto not in ("http", "https"):
+                    proto = "https"
+                redirect_uri = f"{proto}://{host.rstrip('/')}/auth/callback"
+            else:
+                # last resort: request.base_url
+                redirect_uri = str(request.base_url).rstrip("/") + "/auth/callback"
+    # enforce https to avoid Mixed Content and Strava rejecting mismatched schema
+    if redirect_uri.startswith("http://"):
+        redirect_uri = "https://" + redirect_uri[len("http://"):]
 
     scope = os.getenv("STRAVA_SCOPE", "read,activity:read_all")
     params = {
@@ -51,9 +68,7 @@ def build_strava_auth_url(request: Request | None = None):
         "approval_prompt": "auto",
         "scope": scope,
     }
-    # debug log which redirect_uri will be used (helps diagnose localhost redirects)
-    logging.info("build_strava_auth_url -> using redirect_uri: %s", redirect_uri)
-    # If redirect_uri is empty, return empty string so caller can handle the error cleanly
+    logging.info("build_strava_auth_url -> using redirect_uri: %s", redirect_uri or "(none)")
     if not redirect_uri:
         return ""
     return "https://www.strava.com/oauth/authorize?" + urlencode(params)
