@@ -475,53 +475,43 @@ async def callback(request: Request, code: str | None = None, state: str | None 
 	}
 	payload_json = json.dumps(payload)
 
-	# Build an HTML that:
-	#  - posts message to opener if present (usual popup flow)
-	#  - otherwise redirects to frontend_url and includes the token in the URL fragment so the frontend can read it
-	# For local development (frontend on localhost) also include token as query param to help debugging (only local)
-	include_token_in_query = False
-	try:
-		host = request.url.hostname or ""
-		if "localhost" in (frontend_url or "") or host in ("localhost", "127.0.0.1"):
-			include_token_in_query = True
-	except Exception:
-		include_token_in_query = False
-
-	html = f"""<!doctype html>
-	<html>
-	  <head><meta charset="utf-8" /></head>
-	  <body>
-		<p>Authentication complete. This window will close.</p>
-		<p>If the window does not close automatically, <a id="return" href="{frontend_url}">click here to return to the app</a>.</p>
-		<script>
-		  (function(){{
-			var payload = {payload_json};
-			try {{
-			  if (window.opener && !window.opener.closed) {{
-				window.opener.postMessage(payload, "*");
-				try {{ window.close(); return; }} catch(e){{/* ignored */}}
-			  }}
-			}} catch(e){{}}
-			// fallback: if local frontend we include token in query for easier debugging, otherwise put it in fragment
-			try {{
-			  var target = "{frontend_url}";
-			  if (target) {{
-				{"{"}# When building fragment/query include otp_key as well so clients can call /auth/token?key=...
-				if ({str(include_token_in_query).lower()}) {{
-				  var sep = target.indexOf('?') === -1 ? '?' : '&';
-				  window.location.href = target + sep + "access_token=" + encodeURIComponent(payload.access_token || "") + "&strava_id=" + encodeURIComponent(payload.user.strava_id || "");
-				}} else {
-				  var frag = "access_token=" + encodeURIComponent(payload.access_token || "") + "&strava_id=" + encodeURIComponent(payload.user.strava_id || "");
-				  if (payload.otp_key) frag += "&otp_key=" + encodeURIComponent(payload.otp_key);
-				  var sep = target.indexOf('#') === -1 ? '#' : '&';
-				  window.location.href = target + sep + frag;
-				}}
-			  }}
-			}} catch(e){{}}
-		  }})();
-		</script>
-	  </body>
-	</html>"""
+	# Build HTML via concatenation (avoid f-string because JS contains { } which breaks f-strings)
+	html = (
+		"<!doctype html>\n"
+		"<html>\n"
+		"  <head><meta charset=\"utf-8\" /></head>\n"
+		"  <body>\n"
+		"    <p>Authentication complete. This window will close.</p>\n"
+		"    <p>If the window does not close automatically, <a id=\"return\" href=\"" + frontend_url + "\">click here to return to the app</a>.</p>\n"
+		"    <script>\n"
+		"      (function(){\n"
+		"        var payload = " + payload_json + ";\n"
+		"        try {\n"
+		"          if (window.opener && !window.opener.closed) {\n"
+		"            window.opener.postMessage(payload, \"*\");\n"
+		"            try { window.close(); return; } catch(e) { /* ignored */ }\n"
+		"          }\n"
+		"        } catch(e) {}\n"
+		"        // fallback: if local frontend include token in query for debugging, otherwise put it in fragment\n"
+		"        try {\n"
+		"          var target = \"" + frontend_url + "\";\n"
+		"          if (target) {\n"
+		"            if (" + str(include_token_in_query).lower() + ") {\n"
+		"              var sep = target.indexOf('?') === -1 ? '?' : '&';\n"
+		"              window.location.href = target + sep + 'access_token=' + encodeURIComponent(payload.access_token || '') + '&strava_id=' + encodeURIComponent(payload.user.strava_id || '');\n"
+		"            } else {\n"
+		"              var frag = 'access_token=' + encodeURIComponent(payload.access_token || '') + '&strava_id=' + encodeURIComponent(payload.user.strava_id || '');\n"
+		"              if (payload.otp_key) frag += '&otp_key=' + encodeURIComponent(payload.otp_key);\n"
+		"              var sep = target.indexOf('#') === -1 ? '#' : '&';\n"
+		"              window.location.href = target + sep + frag;\n"
+		"            }\n"
+		"          }\n"
+		"        } catch(e) {}\n"
+		"      })();\n"
+		"    </script>\n"
+		"  </body>\n"
+		"</html>"
+	)
 
 	# set cookie so subsequent same-origin requests include the token without extra frontend work
 	resp = HTMLResponse(content=html)
@@ -653,8 +643,3 @@ async def logout():
     return JSONResponse({"logged_out": True, "note": "Clear local token/storage on client to fully logout."})
 
 
-# Webhook and background fetching are handled centrally in:
-#   backend/routes/strava_webhook.py
-# to avoid duplication and keep auth/routes.py focused on OAuth and user endpoints.
-#
-# If other modules import these helper functions, prefer importing them from routes/strava_webhook.py.
