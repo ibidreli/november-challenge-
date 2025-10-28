@@ -268,255 +268,276 @@ async def callback(request: Request, code: str | None = None, state: str | None 
 	- legt/aktualisiert User in der DB
 	- gibt ein HTML zurück, das per postMessage das opener-window benachrichtigt und das Popup schließt.
 	"""
-	# frontend target: prefer explicit FRONTEND_URL env. If missing, map known backend -> frontend pair.
-	# This avoids redirecting to arbitrary/third-party referer/origin hosts (e.g. Google).
-	frontend_url = os.getenv("FRONTEND_URL", "").strip()
-	if not frontend_url:
-		# safe, explicit mapping for your deployment:
-		try:
-			host_header = (request.headers.get("host") or "").lower()
-			if "november-challenge.onrender.com" in host_header:
-				frontend_url = "https://november-challenge-1.onrender.com"
-			else:
-				# fallback to root — no external redirect
+	try:
+		# frontend target: prefer explicit FRONTEND_URL env. If missing, map known backend -> frontend pair.
+		# This avoids redirecting to arbitrary/third-party referer/origin hosts (e.g. Google).
+		frontend_url = os.getenv("FRONTEND_URL", "").strip()
+		if not frontend_url:
+			# safe, explicit mapping for your deployment:
+			try:
+				host_header = (request.headers.get("host") or "").lower()
+				if "november-challenge.onrender.com" in host_header:
+					frontend_url = "https://november-challenge-1.onrender.com"
+				else:
+					# fallback to root — no external redirect
+					frontend_url = "/"
+			except Exception:
 				frontend_url = "/"
-		except Exception:
-			frontend_url = "/"
-	logging.info("callback -> using frontend_url=%s", frontend_url)
+		logging.info("callback -> using frontend_url=%s", frontend_url)
 
-	if not code:
-		payload = {"type": "strava_auth_complete", "success": False, "error": "no_code"}
-		payload_json = json.dumps(payload)
-		html = f"""<!doctype html>
-		<html>
-		  <head><meta charset="utf-8" /></head>
-		  <body>
-			<p>No code returned by Strava.</p>
-			<p><a id="return" href="{frontend_url}">Zurück zur App</a></p>
-			<script>
-			  (function(){{
-				var payload = {payload_json};
-				try {{
-				  if (window.opener && !window.opener.closed) {{
-					window.opener.postMessage(payload, "*");
-					window.close();
-					return;
-				  }}
-				}} catch(e){{}}
-				try {{
-				  var target = "{frontend_url}";
-				  if (target) {{
-					window.location.href = target + (target.indexOf('?')>-1 ? '&' : '?') + 'auth=failed';
-				  }}
-				}} catch(e){{}}
-			  }})();
-			</script>
-		  </body>
-		</html>"""
-		return HTMLResponse(content=html, status_code=400)
+		if not code:
+			payload = {"type": "strava_auth_complete", "success": False, "error": "no_code"}
+			payload_json = json.dumps(payload)
+			html = f"""<!doctype html>
+			<html>
+			  <head><meta charset="utf-8" /></head>
+			  <body>
+				<p>No code returned by Strava.</p>
+				<p><a id="return" href="{frontend_url}">Zurück zur App</a></p>
+				<script>
+				  (function(){{
+					var payload = {payload_json};
+					try {{
+					  if (window.opener && !window.opener.closed) {{
+						window.opener.postMessage(payload, "*");
+						window.close();
+						return;
+					  }}
+					}} catch(e){{}}
+					try {{
+					  var target = "{frontend_url}";
+					  if (target) {{
+						window.location.href = target + (target.indexOf('?')>-1 ? '&' : '?') + 'auth=failed';
+					  }}
+					}} catch(e){{}}
+				  }})();
+				</script>
+			  </body>
+			</html>"""
+			return HTMLResponse(content=html, status_code=400)
 
-	token_url = "https://www.strava.com/oauth/token"
-	client_id = os.getenv("STRAVA_CLIENT_ID")
-	client_secret = os.getenv("STRAVA_CLIENT_SECRET")
-	try:
-		resp = requests.post(token_url, data={
-			"client_id": client_id,
-			"client_secret": client_secret,
-			"code": code,
-			"grant_type": "authorization_code"
-		}, timeout=10)
-		# handle non-200 explicitly to detect Strava messages (e.g. connected-athletes limit)
-		if resp.status_code != 200:
-			text = resp.text or ""
-			# check for typical Strava "connected athletes" message fragments
-			if "connected" in text.lower() and "athlete" in text.lower() or "limit" in text.lower():
-				html = f"""
-				<!doctype html><html><head><meta charset="utf-8"><title>Strava App Limit erreicht</title></head>
-				<body style="font-family:Arial,sans-serif;padding:20px">
-				  <h2>Strava: App‑Limit erreicht</h2>
-				  <p>Strava hat gemeldet, dass die Anwendung das Limit verbundener Sportler überschritten hat.</p>
-				  <p>Optionen:</p>
-				  <ol>
-					<li>Kontaktiere Strava Developer Support und bitte um eine Kontingenterhöhung:
-						<a href="https://support.strava.com/hc/en-us/requests/new?ticket_form_id=360000051848" target="_blank">Strava Support</a>
-					</li>
-					<li>Erstelle vorübergehend eine eigene Strava‑App (Developer Dashboard) und trage deren Client-ID/Secret in deine <code>.env</code> ein, um Tests zu machen.</li>
-					<li>Teste manuell mit einer bekannten Activity‑ID (ohne OAuth) via: <code>/activities/process_by_strava/{'{activity_id}'}?owner_strava_id=YOUR_STRAVA_ID</code></li>
-				  </ol>
-				  <pre style="background:#f6f6f6;padding:10px;border-radius:4px">{text}</pre>
-				</body></html>
-				"""
-				return HTMLResponse(content=html, status_code=502)
-			# otherwise raise to existing handler
-		resp.raise_for_status()
-		data = resp.json()
-	except Exception as e:
-		payload = {"type": "strava_auth_complete", "success": False, "error": "token_exchange_failed", "details": str(e)}
-		html = f"""
-		<!doctype html>
-		<html>
-		  <head><meta charset="utf-8" /></head>
-		  <body>
-			<p>Token exchange failed. This window will close.</p>
-			<pre>{str(e)}</pre>
-			<script>
-			  try {{
-				window.opener && window.opener.postMessage({payload!r}, "*");
-			  }} catch(e){{}}
-			  setTimeout(()=>window.close(), 1200);
-			</script>
-		  </body>
-		</html>
-		"""
-		return HTMLResponse(content=html, status_code=502)
-
-	access_token = data.get("access_token")
-	refresh_token = data.get("refresh_token")
-	athlete = data.get("athlete") or {}
-	strava_id = athlete.get("id")
-	name_parts = []
-	if athlete.get("firstname"):
-		name_parts.append(athlete.get("firstname"))
-	if athlete.get("lastname"):
-		name_parts.append(athlete.get("lastname"))
-	name = " ".join(name_parts) if name_parts else athlete.get("username") or "Strava User"
-
-	if not strava_id or not access_token:
-		payload = {"type": "strava_auth_complete", "success": False, "error": "invalid_token_response", "response": data}
-		html = f"""
-		<!doctype html>
-		<html>
-		  <head><meta charset="utf-8" /></head>
-		  <body>
-			<p>Invalid token response. This window will close.</p>
-			<script>
-			  try {{
-				window.opener && window.opener.postMessage({payload!r}, "*");
-			  }} catch(e){{}}
-			  setTimeout(()=>window.close(), 1200);
-			</script>
-		  </body>
-		</html>
-		"""
-		return HTMLResponse(content=html, status_code=502)
-
-	# create or update user in DB
-	try:
-		user = db.query(User).filter_by(strava_id=strava_id).first()
-		if not user:
-			user = User(name=name, strava_id=strava_id, access_token=access_token, refresh_token=refresh_token)
-			db.add(user)
-		else:
-			user.name = name
-			user.access_token = access_token
-			user.refresh_token = refresh_token
-		# ensure slots default/length
+		token_url = "https://www.strava.com/oauth/token"
+		client_id = os.getenv("STRAVA_CLIENT_ID")
+		client_secret = os.getenv("STRAVA_CLIENT_SECRET")
 		try:
-			user.ensure_slots()
-		except Exception:
-			pass
-		db.commit()
-		db.refresh(user)
-	except Exception as e:
-		# rollback and log the full traceback so you can see the root cause on the server
+			resp = requests.post(token_url, data={
+				"client_id": client_id,
+				"client_secret": client_secret,
+				"code": code,
+				"grant_type": "authorization_code"
+			}, timeout=10)
+			# handle non-200 explicitly to detect Strava messages (e.g. connected-athletes limit)
+			if resp.status_code != 200:
+				text = resp.text or ""
+				# check for typical Strava "connected athletes" message fragments
+				if "connected" in text.lower() and "athlete" in text.lower() or "limit" in text.lower():
+					html = f"""
+					<!doctype html><html><head><meta charset="utf-8"><title>Strava App Limit erreicht</title></head>
+					<body style="font-family:Arial,sans-serif;padding:20px">
+					  <h2>Strava: App‑Limit erreicht</h2>
+					  <p>Strava hat gemeldet, dass die Anwendung das Limit verbundener Sportler überschritten hat.</p>
+					  <p>Optionen:</p>
+					  <ol>
+						<li>Kontaktiere Strava Developer Support und bitte um eine Kontingenterhöhung:
+							<a href="https://support.strava.com/hc/en-us/requests/new?ticket_form_id=360000051848" target="_blank">Strava Support</a>
+						</li>
+						<li>Erstelle vorübergehend eine eigene Strava‑App (Developer Dashboard) und trage deren Client-ID/Secret in deine <code>.env</code> ein, um Tests zu machen.</li>
+						<li>Teste manuell mit einer bekannten Activity‑ID (ohne OAuth) via: <code>/activities/process_by_strava/{'{activity_id}'}?owner_strava_id=YOUR_STRAVA_ID</code></li>
+					  </ol>
+					  <pre style="background:#f6f6f6;padding:10px;border-radius:4px">{text}</pre>
+					</body></html>
+					"""
+					return HTMLResponse(content=html, status_code=502)
+				# otherwise raise to existing handler
+			resp.raise_for_status()
+			data = resp.json()
+		except Exception as e:
+			payload = {"type": "strava_auth_complete", "success": False, "error": "token_exchange_failed", "details": str(e)}
+			html = f"""
+			<!doctype html>
+			<html>
+			  <head><meta charset="utf-8" /></head>
+			  <body>
+				<p>Token exchange failed. This window will close.</p>
+				<pre>{str(e)}</pre>
+				<script>
+				  try {{
+					window.opener && window.opener.postMessage({payload!r}, "*");
+				  }} catch(e){{}}
+				  setTimeout(()=>window.close(), 1200);
+				</script>
+			  </body>
+			</html>
+			"""
+			return HTMLResponse(content=html, status_code=502)
+
+		access_token = data.get("access_token")
+		refresh_token = data.get("refresh_token")
+		athlete = data.get("athlete") or {}
+		strava_id = athlete.get("id")
+		name_parts = []
+		if athlete.get("firstname"):
+			name_parts.append(athlete.get("firstname"))
+		if athlete.get("lastname"):
+			name_parts.append(athlete.get("lastname"))
+		name = " ".join(name_parts) if name_parts else athlete.get("username") or "Strava User"
+
+		if not strava_id or not access_token:
+			payload = {"type": "strava_auth_complete", "success": False, "error": "invalid_token_response", "response": data}
+			html = f"""
+			<!doctype html>
+			<html>
+			  <head><meta charset="utf-8" /></head>
+			  <body>
+				<p>Invalid token response. This window will close.</p>
+				<script>
+				  try {{
+					window.opener && window.opener.postMessage({payload!r}, "*");
+				  }} catch(e){{}}
+				  setTimeout(()=>window.close(), 1200);
+				</script>
+			  </body>
+			</html>
+			"""
+			return HTMLResponse(content=html, status_code=502)
+
+		# create or update user in DB
 		try:
-			db.rollback()
+			user = db.query(User).filter_by(strava_id=strava_id).first()
+			if not user:
+				user = User(name=name, strava_id=strava_id, access_token=access_token, refresh_token=refresh_token)
+				db.add(user)
+			else:
+				user.name = name
+				user.access_token = access_token
+				user.refresh_token = refresh_token
+			# ensure slots default/length
+			try:
+				user.ensure_slots()
+			except Exception:
+				pass
+			db.commit()
+			db.refresh(user)
+		except Exception as e:
+			# rollback and log the full traceback so you can see the root cause on the server
+			try:
+				db.rollback()
+			except Exception:
+				pass
+			logging.error("Database error during auth callback: %s\n%s", e, traceback.format_exc())
+			payload = {
+				"type": "strava_auth_complete",
+				"success": False,
+				"error": "db_error",
+				"details": str(e),
+				"hint": "Check DATABASE_URL and that the DB is reachable. See server logs for full traceback."
+			}
+			html = f"""
+			<!doctype html>
+			<html>
+			  <head><meta charset="utf-8" /></head>
+			  <body>
+				<h3>Database error during authentication</h3>
+				<pre>{str(e)}</pre>
+				<p>Please check your DATABASE_URL in <code>.env</code> and the server logs for details.</p>
+				<script>
+				  try {{
+					window.opener && window.opener.postMessage({payload!r}, "*");
+				  }} catch(e){{}}
+				  setTimeout(()=>window.close(), 2000);
+				</script>
+			  </body>
+			</html>
+			"""
+			return HTMLResponse(content=html, status_code=500)
+
+		# After successful user creation/update: sync recent activities from Strava automatically
+		try:
+			sync_result = sync_recent_activities_from_strava(user, db)
+			logging.info("Sync result after auth: %s", sync_result)
 		except Exception:
-			pass
-		logging.error("Database error during auth callback: %s\n%s", e, traceback.format_exc())
+			logging.exception("Automatic sync after registration failed.")
+
+		# generate a short-lived one-time key so frontend can fetch the token reliably
+		try:
+			otp_key = uuid.uuid4().hex
+			OTP_STORE[otp_key] = {"access_token": access_token, "strava_id": str(strava_id), "expires": time.time() + 120}
+		except Exception:
+			logging.exception("Failed to create OTP for token delivery")
+			otp_key = None
+
+		# success -> inform opener with basic user info (include access_token + otp_key so frontend can fetch it)
 		payload = {
 			"type": "strava_auth_complete",
-			"success": False,
-			"error": "db_error",
-			"details": str(e),
-			"hint": "Check DATABASE_URL and that the DB is reachable. See server logs for full traceback."
+			"success": True,
+			"user": {"id": user.id, "name": user.name, "strava_id": user.strava_id},
+			"access_token": access_token,
+			"otp_key": otp_key
 		}
-		html = f"""
-		<!doctype html>
-		<html>
-		  <head><meta charset="utf-8" /></head>
-		  <body>
-			<h3>Database error during authentication</h3>
-			<pre>{str(e)}</pre>
-			<p>Please check your DATABASE_URL in <code>.env</code> and the server logs for details.</p>
-			<script>
-			  try {{
-				window.opener && window.opener.postMessage({payload!r}, "*");
-			  }} catch(e){{}}
-			  setTimeout(()=>window.close(), 2000);
-			</script>
-		  </body>
-		</html>
-		"""
-		return HTMLResponse(content=html, status_code=500)
+		payload_json = json.dumps(payload)
 
-	# After successful user creation/update: sync recent activities from Strava automatically
-	try:
-		sync_result = sync_recent_activities_from_strava(user, db)
-		logging.info("Sync result after auth: %s", sync_result)
-	except Exception:
-		logging.exception("Automatic sync after registration failed.")
+		# Build HTML via concatenation (avoid f-string because JS contains { } which breaks f-strings)
+		html = (
+			"<!doctype html>\n"
+			"<html>\n"
+			"  <head><meta charset=\"utf-8\" /></head>\n"
+			"  <body>\n"
+			"    <p>Authentication complete. This window will close.</p>\n"
+			"    <p>If the window does not close automatically, <a id=\"return\" href=\"" + frontend_url + "\">click here to return to the app</a>.</p>\n"
+			"    <script>\n"
+			"      (function(){\n"
+			"        var payload = " + payload_json + ";\n"
+			"        try {\n"
+			"          if (window.opener && !window.opener.closed) {\n"
+			"            window.opener.postMessage(payload, \"*\");\n"
+			"            try { window.close(); return; } catch(e) { /* ignored */ }\n"
+			"          }\n"
+			"        } catch(e) {}\n"
+			"        // fallback: if local frontend include token in query for debugging, otherwise put it in fragment\n"
+			"        try {\n"
+			"          var target = \"" + frontend_url + "\";\n"
+			"          if (target) {\n"
+			"            if (" + str(include_token_in_query).lower() + ") {\n"
+			"              var sep = target.indexOf('?') === -1 ? '?' : '&';\n"
+			"              window.location.href = target + sep + 'access_token=' + encodeURIComponent(payload.access_token || '') + '&strava_id=' + encodeURIComponent(payload.user.strava_id || '');\n"
+			"            } else {\n"
+			"              var frag = 'access_token=' + encodeURIComponent(payload.access_token || '') + '&strava_id=' + encodeURIComponent(payload.user.strava_id || '');\n"
+			"              if (payload.otp_key) frag += '&otp_key=' + encodeURIComponent(payload.otp_key);\n"
+			"              var sep = target.indexOf('#') === -1 ? '#' : '&';\n"
+			"              window.location.href = target + sep + frag;\n"
+			"            }\n"
+			"          }\n"
+			"        } catch(e) {}\n"
+			"      })();\n"
+			"    </script>\n"
+			"  </body>\n"
+			"</html>"
+		)
 
-	# generate a short-lived one-time key so frontend can fetch the token reliably
-	try:
-		otp_key = uuid.uuid4().hex
-		OTP_STORE[otp_key] = {"access_token": access_token, "strava_id": str(strava_id), "expires": time.time() + 120}
-	except Exception:
-		logging.exception("Failed to create OTP for token delivery")
-		otp_key = None
+		# set cookie so subsequent same-origin requests include the token without extra frontend work
+		resp = HTMLResponse(content=html)
+		resp.set_cookie("access_token", access_token or "", samesite="lax", httponly=False, max_age=60*60*24)
+		return resp
 
-	# success -> inform opener with basic user info (include access_token + otp_key so frontend can fetch it)
-	payload = {
-		"type": "strava_auth_complete",
-		"success": True,
-		"user": {"id": user.id, "name": user.name, "strava_id": user.strava_id},
-		"access_token": access_token,
-		"otp_key": otp_key
-	}
-	payload_json = json.dumps(payload)
-
-	# Build HTML via concatenation (avoid f-string because JS contains { } which breaks f-strings)
-	html = (
-		"<!doctype html>\n"
-		"<html>\n"
-		"  <head><meta charset=\"utf-8\" /></head>\n"
-		"  <body>\n"
-		"    <p>Authentication complete. This window will close.</p>\n"
-		"    <p>If the window does not close automatically, <a id=\"return\" href=\"" + frontend_url + "\">click here to return to the app</a>.</p>\n"
-		"    <script>\n"
-		"      (function(){\n"
-		"        var payload = " + payload_json + ";\n"
-		"        try {\n"
-		"          if (window.opener && !window.opener.closed) {\n"
-		"            window.opener.postMessage(payload, \"*\");\n"
-		"            try { window.close(); return; } catch(e) { /* ignored */ }\n"
-		"          }\n"
-		"        } catch(e) {}\n"
-		"        // fallback: if local frontend include token in query for debugging, otherwise put it in fragment\n"
-		"        try {\n"
-		"          var target = \"" + frontend_url + "\";\n"
-		"          if (target) {\n"
-		"            if (" + str(include_token_in_query).lower() + ") {\n"
-		"              var sep = target.indexOf('?') === -1 ? '?' : '&';\n"
-		"              window.location.href = target + sep + 'access_token=' + encodeURIComponent(payload.access_token || '') + '&strava_id=' + encodeURIComponent(payload.user.strava_id || '');\n"
-		"            } else {\n"
-		"              var frag = 'access_token=' + encodeURIComponent(payload.access_token || '') + '&strava_id=' + encodeURIComponent(payload.user.strava_id || '');\n"
-		"              if (payload.otp_key) frag += '&otp_key=' + encodeURIComponent(payload.otp_key);\n"
-		"              var sep = target.indexOf('#') === -1 ? '#' : '&';\n"
-		"              window.location.href = target + sep + frag;\n"
-		"            }\n"
-		"          }\n"
-		"        } catch(e) {}\n"
-		"      })();\n"
-		"    </script>\n"
-		"  </body>\n"
-		"</html>"
-	)
-
-	# set cookie so subsequent same-origin requests include the token without extra frontend work
-	resp = HTMLResponse(content=html)
-	resp.set_cookie("access_token", access_token or "", samesite="lax", httponly=False, max_age=60*60*24)
-	return resp
+	except Exception as e:
+		# Log full traceback on server
+		logging.error("Unhandled exception in /auth/callback: %s\n%s", e, traceback.format_exc())
+		# Short, safe traceback preview for browser (masking not to leak secrets)
+		trace = traceback.format_exc()
+		trace_short = trace if len(trace) <= 2000 else trace[:2000] + "\n\n...(truncated)"
+		# simple HTML response with preview to aid debugging
+		html_err = (
+			"<!doctype html><html><head><meta charset='utf-8'><title>Auth Callback Error</title></head>"
+			"<body style='font-family:Arial,sans-serif;padding:20px'>"
+			"<h2>Authentication Error</h2>"
+			"<p>Ein Fehler ist beim Verarbeiten der OAuth‑Antwort aufgetreten. Prüfe die Serverlogs oder <code>/debug/nodb</code>.</p>"
+			"<h3>Kurze Traceback‑Vorschau</h3>"
+			"<pre style='background:#f6f6f6;padding:10px;border-radius:4px;white-space:pre-wrap;max-height:420px;overflow:auto;'>"
+			+ trace_short.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+			+ "</pre>"
+			"</body></html>"
+		)
+		return HTMLResponse(content=html_err, status_code=500)
 
 # simple in-memory one-time-token store: key -> {"access_token":..., "strava_id":..., "expires": epoch}
 # Note: single-process only; fine for dev. For production persist to DB or redis.
