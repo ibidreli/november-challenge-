@@ -559,6 +559,7 @@ async def fetch_token(key: str | None = None, db: Session = Depends(get_db)):
     """
     Exchange a one-time key (provided by /auth/callback redirect/postMessage) for the access_token.
     Key expires after short time and is removed after use.
+    Also sets an access_token cookie on the response to simplify subsequent API calls from the browser.
     """
     if not key:
         raise HTTPException(status_code=400, detail="missing_key")
@@ -582,11 +583,30 @@ async def fetch_token(key: str | None = None, db: Session = Depends(get_db)):
             user = db.query(User).filter_by(strava_id=strava_id).first()
     except Exception:
         logging.exception("DB error while fetching user for token exchange")
-    # set cookie in response via JSONResponse headers isn't direct; client may set header/cookie based on this response.
+    # prepare payload
     resp_payload = {"access_token": access_token, "strava_id": strava_id}
     if user:
         resp_payload["user"] = {"id": user.id, "name": user.name}
-    return JSONResponse(resp_payload)
+
+    # Build response and set cookie so client can use cookie-based auth for subsequent requests.
+    # Use SameSite=None and Secure for cross-site cookie usage. Secure only when FRONTEND_URL is https.
+    resp = JSONResponse(resp_payload)
+    try:
+        frontend = (os.getenv("FRONTEND_URL") or "").strip().lower()
+        secure_flag = True if frontend.startswith("https://") else False
+    except Exception:
+        secure_flag = False
+    # Note: cookie domain will be the backend host (where this endpoint is served).
+    # The client must call this endpoint with fetch(..., credentials: 'include') to accept the cookie.
+    resp.set_cookie(
+        key="access_token",
+        value=access_token or "",
+        max_age=60 * 60 * 24,
+        httponly=False,   # allow frontend to read it if needed; keep false for compatibility
+        secure=secure_flag,
+        samesite="None"   # required for cross-site cookie usage
+    )
+    return resp
 
 
 # New debug endpoint to inspect runtime config (masked)

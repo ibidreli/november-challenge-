@@ -49,9 +49,16 @@ except Exception as e:
 app = FastAPI(title="November Challenge API")
 
 
+FRONTEND_URL = os.getenv("FRONTEND_URL", "").strip()
+if FRONTEND_URL:
+    allow_origins = [FRONTEND_URL]
+else:
+    # fallback to wildcard for local dev only
+    allow_origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # adjust in production
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
