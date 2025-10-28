@@ -495,13 +495,17 @@ async def callback(request: Request, code: str | None = None, state: str | None 
 		#  - posts message to opener (popup flow),
 		#  - ensures server-side /auth/token is invoked (same-origin) to set backend cookie before redirect,
 		#  - redirects to frontend and includes backend_base so frontend can use correct https backend.
-		backend_base = os.getenv("BACKEND_BASE_URL", "") or str(request.base_url).rstrip("/")
-		# construct redirect target including token/strava_id/otp_key and backend_base (use query for easier parsing)
-		# include_token_in_query controls whether we put access_token in query (for local/debug) or fragment.
-		# The script below will:
-		#  1) postMessage to opener if present
-		#  2) if otp_key present, call fetch('/auth/token?key=...') on THIS origin to set cookie
-		#  3) then redirect to frontend target including backend_base param
+		# Determine backend base URL using forwarded headers when available so we don't emit http behind an https proxy.
+		try:
+			proto = (request.headers.get("x-forwarded-proto") or request.url.scheme or "").lower()
+			host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc or "").strip()
+			if not proto or proto not in ("http", "https"):
+				# be conservative: prefer https when unknown
+				proto = "https"
+			backend_base = os.getenv("BACKEND_BASE_URL", "").strip() or (f"{proto}://{host.rstrip('/')}" if host else str(request.base_url).rstrip("/"))
+		except Exception:
+			backend_base = os.getenv("BACKEND_BASE_URL", "") or str(request.base_url).rstrip("/")
+
 		html = (
 			"<!doctype html>\n"
 			"<html>\n"
@@ -595,5 +599,29 @@ async def fetch_token(request: Request, key: Optional[str] = None, db: Session =
      """
      if not key:
          raise HTTPException(status_code=400, detail="missing_key")
+     try:
+         # Lookup and remove from store
+         data = OTP_STORE.pop(key, None)
+         if not data:
+             raise HTTPException(status_code=404, detail="key_not_found_or_expired")
+         access_token = data["access_token"]
+         strava_id = data["strava_id"]
+
+         # Set secure flag: true if request was forwarded by TLS-terminating proxy (Render)
+         secure_flag = False
+         try:
+             # Derive secure flag from x-forwarded-proto when service sitzt hinter TLS-terminierender Reverse‑Proxy
+             proto = (request.headers.get("x-forwarded-proto") or request.url.scheme or "").lower()
+             secure_flag = (proto == "https")
+         except Exception:
+             secure_flag = False
+
+         # Set cookie (httponly + secure if applicable)
+         resp = JSONResponse({"access_token": access_token})
+         resp.set_cookie("access_token", access_token, samesite="lax", httponly=True, secure=secure_flag, max_age=60*60*24)
+         return resp
+     except Exception:
+         logging.exception("Token exchange failed")
+         raise HTTPException(status_code=500, detail="token_exchange_failed")
 
 
