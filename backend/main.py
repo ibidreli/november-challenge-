@@ -100,14 +100,30 @@ else:
 	@app.get("/auth/login")
 	def fallback_auth_login():
 		# Provide an informative HTML page for browser attempts to login
-		html = f"""
-		<!doctype html><html><head><meta charset="utf-8"><title>Service nicht verfügbar</title></head>
-		<body style="font-family:Arial,sans-serif;padding:20px">
-		  <h2>Service vorübergehend nicht verfügbar</h2>
-		  <p>Der Auth‑Login ist derzeit nicht verfügbar, weil beim Start der Anwendung ein Fehler aufgetreten ist.</p>
-		  <p>Prüfe das Debug‑Endpoint: <a href="/debug/nodb">/debug/nodb</a> (zeigt Traceback) und die Service‑Logs in Render.</p>
-		</body></html>
-		"""
+		# show masked traceback if available to speed up debugging (do not leak secrets)
+		trace = DB_IMPORT_ERROR or "(no traceback captured)"
+		# keep it short: show first ~2000 chars
+		trace_short = trace if len(trace) <= 2000 else trace[:2000] + "\n\n...(truncated)"
+		# HTML with guidance
+		html = (
+			"<!doctype html><html><head><meta charset='utf-8'><title>Service nicht verfügbar</title></head>"
+			"<body style='font-family:Arial,sans-serif;padding:20px'>"
+			"<h2>Service vorübergehend nicht verfügbar</h2>"
+			"<p>Der Auth‑Login ist aktuell nicht verfügbar, weil beim Start der Anwendung ein Fehler aufgetreten ist.</p>"
+			"<h3>Diagnose (kurze Traceback‑Vorschau)</h3>"
+			"<pre style='background:#f6f6f6;padding:10px;border-radius:4px;white-space:pre-wrap;max-height:420px;overflow:auto;'>"
+			+ trace_short.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;") +
+			"</pre>"
+			"<p>Weitere Schritte:</p>"
+			"<ol>"
+			"<li>Rufe <a href='/debug/nodb'>/debug/nodb</a> auf, um den vollständigen Traceback zu sehen.</li>"
+			"<li>Prüfe, ob die Datei <code>auth/routes.py</code> syntaktisch korrekt ist (keine f-string/JS‑Braces Konflikte).</li>"
+			"<li>Stelle sicher, dass Umgebungsvariablen korrekt sind:<br>"
+			"<code>DATABASE_URL</code> (Postgres) und <code>FRONTEND_URL</code> (z. B. https://november-challenge-1.onrender.com).</li>"
+			"<li>Bei Fragen: kopiere den Traceback (aus /debug/nodb) und sende ihn hier.</li>"
+			"</ol>"
+			"</body></html>"
+		)
 		return HTMLResponse(content=html, status_code=503)
 
 
