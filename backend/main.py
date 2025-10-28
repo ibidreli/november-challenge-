@@ -50,11 +50,14 @@ app = FastAPI(title="November Challenge API")
 
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "").strip()
+# Always allow the known deployed frontend origin as a safe default in addition to any explicit env value.
+# This avoids CORS/credential issues when FRONTEND_URL isn't set in the service env.
+DEFAULT_FRONTEND = "https://november-challenge-1.onrender.com"
 if FRONTEND_URL:
     allow_origins = [FRONTEND_URL]
 else:
-    # fallback to wildcard for local dev only
-    allow_origins = ["*"]
+    # prefer the deployed frontend domain rather than wildcard to keep credentials working
+    allow_origins = [DEFAULT_FRONTEND]
 
 app.add_middleware(
     CORSMiddleware,
