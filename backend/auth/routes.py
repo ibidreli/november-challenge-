@@ -443,8 +443,13 @@ async def callback(request: Request, code: str | None = None, state: str | None 
     except Exception:
         logging.exception("Automatic sync after registration failed.")
 
-    # success -> inform opener with basic user info
-    payload = {"type": "strava_auth_complete", "success": True, "user": {"id": user.id, "name": user.name, "strava_id": user.strava_id}}
+    # success -> inform opener with basic user info (include access_token so frontend can call authenticated endpoints)
+    payload = {
+        "type": "strava_auth_complete",
+        "success": True,
+        "user": {"id": user.id, "name": user.name, "strava_id": user.strava_id},
+        "access_token": access_token
+    }
     payload_json = json.dumps(payload)
     html = f"""<!doctype html>
     <html>

@@ -1,17 +1,32 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Header, HTTPException
 from sqlalchemy.orm import Session
 from models.user import User
 from database import get_db
+from typing import Optional
 
 
 router = APIRouter()
 
 
 @router.get("/me")
-def get_current_user(sync: bool = Query(False), db: Session = Depends(get_db)):
-    user = db.query(User).first()
+def get_current_user(sync: bool = Query(False), auth_header: Optional[str] = Header(None, alias="Authorization"), db: Session = Depends(get_db)):
+    """
+    Require Authorization: Bearer <access_token>.
+    If no valid token provided, return 401 so frontend shows login screen.
+    """
+    # extract bearer token
+    if not auth_header:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    token = auth_header.strip()
+    if token.lower().startswith("bearer "):
+        token = token[7:].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = db.query(User).filter_by(access_token=token).first()
     if not user:
-        return {"message": "No users found."}
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
     # optionally sync only this user (useful for frontend to refresh current user's activities)
     if sync:
         try:
