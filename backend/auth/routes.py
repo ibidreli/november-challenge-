@@ -476,6 +476,16 @@ async def callback(request: Request, code: str | None = None, state: str | None 
 		}
 		payload_json = json.dumps(payload)
 
+		# Determine whether to include token in query (local debug) or use fragment.
+		# ensure include_token_in_query is defined to avoid NameError in the HTML builder
+		include_token_in_query = False
+		try:
+			host = request.url.hostname or ""
+			if "localhost" in (frontend_url or "") or host in ("localhost", "127.0.0.1"):
+				include_token_in_query = True
+		except Exception:
+			include_token_in_query = False
+
 		# Build HTML via concatenation (avoid f-string because JS contains { } which breaks f-strings)
 		html = (
 			"<!doctype html>\n"
