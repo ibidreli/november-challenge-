@@ -23,7 +23,13 @@ def get_current_user(sync: bool = Query(False), request: Request = None, auth_he
         if t:
             token = t
     if not token and request is not None:
+        # cookie fallback
         token = request.cookies.get("access_token") or None
+    # query param fallback (used in local-debug redirect)
+    if not token and request is not None:
+        qp = request.query_params.get("access_token")
+        if qp:
+            token = qp
 
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")

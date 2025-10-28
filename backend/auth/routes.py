@@ -9,6 +9,8 @@ from database import get_db
 from models.user import User
 import logging, traceback, datetime, json
 from typing import Optional
+import uuid
+import time
 
 # load .env only when explicitly requested (avoid accidentally overriding Render env vars)
 if os.getenv("LOAD_ENV_FILE", "0") == "1":
@@ -24,8 +26,8 @@ def build_strava_auth_url(request: Request | None = None):
     """
     Build Strava auth URL.
     Priority:
-      1) STRAVA_REDIRECT_URI env (if set and not pointing to localhost) — ensure https
-      2) Build from X-Forwarded-Proto + X-Forwarded-Host (or Host) from request — ensure https
+      1) STRAVA_REDIRECT_URI env (if set) — normalized
+      2) Build from X-Forwarded-Proto + X-Forwarded-Host (or Host) from request
       3) Fallback to request.base_url
     Returns empty string on failure.
     """
@@ -36,9 +38,9 @@ def build_strava_auth_url(request: Request | None = None):
     if redirect_uri_env and not redirect_uri_env.lower().startswith(("http://", "https://")):
         redirect_uri_env = "https://" + redirect_uri_env
 
-    # prefer env when present and not localhost
+    # PREFER env when present (use the exact redirect you registered at Strava).
     redirect_uri = ""
-    if redirect_uri_env and not ("localhost" in redirect_uri_env or "127.0.0.1" in redirect_uri_env):
+    if redirect_uri_env:
         redirect_uri = redirect_uri_env
     else:
         # build from forwarded headers when available (handles reverse proxies like Render)
@@ -52,10 +54,9 @@ def build_strava_auth_url(request: Request | None = None):
             else:
                 # last resort: request.base_url
                 redirect_uri = str(request.base_url).rstrip("/") + "/auth/callback"
-    # enforce https to avoid Mixed Content and Strava rejecting mismatched schema
-    if redirect_uri.startswith("http://"):
+    # enforce https to avoid Mixed Content and Strava rejecting mismatched schema (but keep explicit http if env provided)
+    if redirect_uri.startswith("http://") and not redirect_uri_env:
         redirect_uri = "https://" + redirect_uri[len("http://"):]
-
     scope = os.getenv("STRAVA_SCOPE", "read,activity:read_all")
     params = {
         "client_id": client_id,
@@ -443,14 +444,36 @@ async def callback(request: Request, code: str | None = None, state: str | None 
     except Exception:
         logging.exception("Automatic sync after registration failed.")
 
-    # success -> inform opener with basic user info (include access_token so frontend can call authenticated endpoints)
+    # generate a short-lived one-time key so frontend can fetch the token reliably
+    try:
+        otp_key = uuid.uuid4().hex
+        OTP_STORE[otp_key] = {"access_token": access_token, "strava_id": str(strava_id), "expires": time.time() + 120}
+    except Exception:
+        logging.exception("Failed to create OTP for token delivery")
+        otp_key = None
+
+    # success -> inform opener with basic user info (include access_token + otp_key so frontend can fetch it)
     payload = {
         "type": "strava_auth_complete",
         "success": True,
         "user": {"id": user.id, "name": user.name, "strava_id": user.strava_id},
-        "access_token": access_token
+        "access_token": access_token,
+        "otp_key": otp_key
     }
     payload_json = json.dumps(payload)
+
+    # Build an HTML that:
+    #  - posts message to opener if present (usual popup flow)
+    #  - otherwise redirects to frontend_url and includes the token in the URL fragment so the frontend can read it
+    # For local development (frontend on localhost) also include token as query param to help debugging (only local)
+    include_token_in_query = False
+    try:
+        host = request.url.hostname or ""
+        if "localhost" in (frontend_url or "") or host in ("localhost", "127.0.0.1"):
+            include_token_in_query = True
+    except Exception:
+        include_token_in_query = False
+
     html = f"""<!doctype html>
     <html>
       <head><meta charset="utf-8" /></head>
@@ -466,21 +489,68 @@ async def callback(request: Request, code: str | None = None, state: str | None 
                 try {{ window.close(); return; }} catch(e){{/* ignored */}}
               }}
             }} catch(e){{}}
+            // fallback: if local frontend we include token in query for easier debugging, otherwise put it in fragment
             try {{
               var target = "{frontend_url}";
               if (target) {{
-                window.location.href = target + (target.indexOf('?')>-1 ? '&' : '?') + 'auth=complete';
+                if ({str(include_token_in_query).lower()}) {{
+                  var sep = target.indexOf('?') === -1 ? '?' : '&';
+                  window.location.href = target + sep + "access_token=" + encodeURIComponent(payload.access_token || "") + "&strava_id=" + encodeURIComponent(payload.user.strava_id || "");
+                }} else {{
+                  var frag = "access_token=" + encodeURIComponent(payload.access_token || "") + "&strava_id=" + encodeURIComponent(payload.user.strava_id || "");
+                  var sep = target.indexOf('#') === -1 ? '#' : '&';
+                  window.location.href = target + sep + frag;
+                }}
               }}
             }} catch(e){{}}
           }})();
         </script>
       </body>
     </html>"""
+
     # set cookie so subsequent same-origin requests include the token without extra frontend work
     resp = HTMLResponse(content=html)
-    # not HttpOnly so frontend/sessionStorage code can also read it if needed; use SameSite=Lax to allow normal top-level redirects
     resp.set_cookie("access_token", access_token or "", samesite="lax", httponly=False, max_age=60*60*24)
     return resp
+
+# simple in-memory one-time-token store: key -> {"access_token":..., "strava_id":..., "expires": epoch}
+# Note: single-process only; fine for dev. For production persist to DB or redis.
+OTP_STORE: dict = {}
+
+# New endpoint: exchange one-time key for token (short-lived)
+@router.get("/token")
+async def fetch_token(key: str | None = None, db: Session = Depends(get_db)):
+    """
+    Exchange a one-time key (provided by /auth/callback redirect/postMessage) for the access_token.
+    Key expires after short time and is removed after use.
+    """
+    if not key:
+        raise HTTPException(status_code=400, detail="missing_key")
+    # cleanup expired entries
+    now = time.time()
+    try:
+        expired = [k for k, v in OTP_STORE.items() if v.get("expires", 0) < now]
+        for k in expired:
+            OTP_STORE.pop(k, None)
+    except Exception:
+        pass
+    entry = OTP_STORE.pop(key, None)
+    if not entry:
+        raise HTTPException(status_code=404, detail="key_not_found_or_expired")
+    access_token = entry.get("access_token")
+    strava_id = entry.get("strava_id")
+    # optionally lookup user info
+    user = None
+    try:
+        if strava_id:
+            user = db.query(User).filter_by(strava_id=strava_id).first()
+    except Exception:
+        logging.exception("DB error while fetching user for token exchange")
+    # set cookie in response via JSONResponse headers isn't direct; client may set header/cookie based on this response.
+    resp_payload = {"access_token": access_token, "strava_id": strava_id}
+    if user:
+        resp_payload["user"] = {"id": user.id, "name": user.name}
+    return JSONResponse(resp_payload)
 
 
 # New debug endpoint to inspect runtime config (masked)
