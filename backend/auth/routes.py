@@ -22,7 +22,7 @@ router = APIRouter()
 CHALLENGE_MONTH = int(os.getenv("CHALLENGE_MONTH", "11"))
 
 
-def build_strava_auth_url(request: Request | None = None):
+def build_strava_auth_url(request: Optional[Request] = None):
     """
     Build Strava auth URL.
     Priority:
@@ -555,7 +555,7 @@ OTP_STORE: dict = {}
 
 # New endpoint: exchange one-time key for token (short-lived)
 @router.get("/token")
-async def fetch_token(key: str | None = None, request: Request | None = None, db: Session = Depends(get_db)):
+async def fetch_token(key: Optional[str] = None, request: Optional[Request] = None, db: Session = Depends(get_db)):
      """
      Exchange a one-time key (provided by /auth/callback redirect/postMessage) for the access_token.
      Key expires after short time and is removed after use.
@@ -563,5 +563,5 @@ async def fetch_token(key: str | None = None, request: Request | None = None, db
      """
      if not key:
          raise HTTPException(status_code=400, detail="missing_key")
-   
+
 
