@@ -476,7 +476,11 @@ async def callback(request: Request, code: str | None = None, state: str | None 
         </script>
       </body>
     </html>"""
-    return HTMLResponse(content=html)
+    # set cookie so subsequent same-origin requests include the token without extra frontend work
+    resp = HTMLResponse(content=html)
+    # not HttpOnly so frontend/sessionStorage code can also read it if needed; use SameSite=Lax to allow normal top-level redirects
+    resp.set_cookie("access_token", access_token or "", samesite="lax", httponly=False, max_age=60*60*24)
+    return resp
 
 
 # New debug endpoint to inspect runtime config (masked)
@@ -516,13 +520,22 @@ async def debug_auth_config(request: Request, db = Depends(get_db)):
     }
 
 
-# new helper: resolve user from Authorization header (Bearer <token>)
-def get_user_from_authorization(auth_header: Optional[str], db: Session) -> Optional[User]:
-    if not auth_header:
-        return None
-    token = auth_header.strip()
-    if token.lower().startswith("bearer "):
-        token = token[7:].strip()
+# new helper: resolve user from Authorization header (Bearer <token>) OR cookie
+def get_user_from_authorization(auth_header: Optional[str], db: Session, request: Request | None = None) -> Optional[User]:
+    """
+    Resolve a user by Bearer token from Authorization header or from access_token cookie.
+    Returns User or None.
+    """
+    token = None
+    if auth_header:
+        t = auth_header.strip()
+        if t.lower().startswith("bearer "):
+            t = t[7:].strip()
+        if t:
+            token = t
+    # fallback: cookie
+    if not token and request is not None:
+        token = request.cookies.get("access_token") or None
     if not token:
         return None
     try:
@@ -534,12 +547,12 @@ def get_user_from_authorization(auth_header: Optional[str], db: Session) -> Opti
 
 # new endpoint: /auth/me
 @router.get("/me")
-async def me(auth_header: Optional[str] = Header(None, alias="Authorization"), db: Session = Depends(get_db)):
+async def me(request: Request, auth_header: Optional[str] = Header(None, alias="Authorization"), db: Session = Depends(get_db)):
     """
-    Liefert den aktuell angemeldeten Benutzer basierend auf Authorization: Bearer <access_token>.
-    Wenn kein gültiges Token übergeben wurde, wird 401 zurückgegeben (Frontend zeigt dann Login).
+    Liefert den aktuell angemeldeten Benutzer basierend auf Authorization: Bearer <access_token>
+    oder access_token cookie. Wenn kein gültiges Token übergeben wurde, wird 401 zurückgegeben.
     """
-    user = get_user_from_authorization(auth_header, db)
+    user = get_user_from_authorization(auth_header, db, request)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     return {"id": user.id, "name": user.name, "strava_id": user.strava_id}

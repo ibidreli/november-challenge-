@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, Header, HTTPException
+from fastapi import APIRouter, Depends, Query, Header, HTTPException, Request
 from sqlalchemy.orm import Session
 from models.user import User
 from database import get_db
@@ -9,17 +9,22 @@ router = APIRouter()
 
 
 @router.get("/me")
-def get_current_user(sync: bool = Query(False), auth_header: Optional[str] = Header(None, alias="Authorization"), db: Session = Depends(get_db)):
+def get_current_user(sync: bool = Query(False), request: Request = None, auth_header: Optional[str] = Header(None, alias="Authorization"), db: Session = Depends(get_db)):
     """
-    Require Authorization: Bearer <access_token>.
+    Require Authorization: Bearer <access_token> or access_token cookie.
     If no valid token provided, return 401 so frontend shows login screen.
     """
-    # extract bearer token
-    if not auth_header:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    token = auth_header.strip()
-    if token.lower().startswith("bearer "):
-        token = token[7:].strip()
+    # extract bearer token from header first, otherwise from cookie
+    token = None
+    if auth_header:
+        t = auth_header.strip()
+        if t.lower().startswith("bearer "):
+            t = t[7:].strip()
+        if t:
+            token = t
+    if not token and request is not None:
+        token = request.cookies.get("access_token") or None
+
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
