@@ -491,7 +491,17 @@ async def callback(request: Request, code: str | None = None, state: str | None 
 		except Exception:
 			include_token_in_query = False
 
-		# Build HTML via concatenation (avoid f-string because JS contains { } which breaks f-strings)
+		# Build HTML that:
+		#  - posts message to opener (popup flow),
+		#  - ensures server-side /auth/token is invoked (same-origin) to set backend cookie before redirect,
+		#  - redirects to frontend and includes backend_base so frontend can use correct https backend.
+		backend_base = os.getenv("BACKEND_BASE_URL", "") or str(request.base_url).rstrip("/")
+		# construct redirect target including token/strava_id/otp_key and backend_base (use query for easier parsing)
+		# include_token_in_query controls whether we put access_token in query (for local/debug) or fragment.
+		# The script below will:
+		#  1) postMessage to opener if present
+		#  2) if otp_key present, call fetch('/auth/token?key=...') on THIS origin to set cookie
+		#  3) then redirect to frontend target including backend_base param
 		html = (
 			"<!doctype html>\n"
 			"<html>\n"
@@ -500,7 +510,7 @@ async def callback(request: Request, code: str | None = None, state: str | None 
 			"    <p>Authentication complete. This window will close.</p>\n"
 			"    <p>If the window does not close automatically, <a id=\"return\" href=\"" + frontend_url + "\">click here to return to the app</a>.</p>\n"
 			"    <script>\n"
-			"      (function(){\n"
+			"      (async function(){\n"
 			"        var payload = " + payload_json + ";\n"
 			"        try {\n"
 			"          if (window.opener && !window.opener.closed) {\n"
@@ -508,25 +518,42 @@ async def callback(request: Request, code: str | None = None, state: str | None 
 			"            try { window.close(); return; } catch(e) { /* ignored */ }\n"
 			"          }\n"
 			"        } catch(e) {}\n"
-			"        // fallback: if local frontend include token in query for debugging, otherwise put it in fragment\n"
+			"        // If we have an otp_key, exchange it with the backend on THIS origin to set cookie\n"
 			"        try {\n"
-			"          var target = \"" + frontend_url + "\";\n"
-			"          if (target) {\n"
-			"            if (" + str(include_token_in_query).lower() + ") {\n"
-			"              var sep = target.indexOf('?') === -1 ? '?' : '&';\n"
-			"              window.location.href = target + sep + 'access_token=' + encodeURIComponent(payload.access_token || '') + '&strava_id=' + encodeURIComponent(payload.user.strava_id || '');\n"
-			"            } else {\n"
-			"              var frag = 'access_token=' + encodeURIComponent(payload.access_token || '') + '&strava_id=' + encodeURIComponent(payload.user.strava_id || '');\n"
-			"              if (payload.otp_key) frag += '&otp_key=' + encodeURIComponent(payload.otp_key);\n"
-			"              var sep = target.indexOf('#') === -1 ? '#' : '&';\n"
-			"              window.location.href = target + sep + frag;\n"
+			"          if (payload.otp_key) {\n"
+			"            try {\n"
+			"              // call same-origin backend endpoint to set cookie (must be called from backend origin)\n"
+			"              await fetch('/auth/token?key=' + encodeURIComponent(payload.otp_key), { method: 'GET', credentials: 'include' });\n"
+			"            } catch(e) {\n"
+			"              console.warn('Backend token exchange failed:', e);\n"
+			"              // continue to redirect anyway; frontend can still try exchange if needed\n"
 			"            }\n"
 			"          }\n"
-			"        } catch(e) {}\n"
+			"        } catch(e) { console.warn('otp exchange error', e); }\n"
+			"        try {\n"
+			"          var target = \"" + frontend_url + "\";\n"
+			"          var backendBase = \"" + backend_base + "\";\n"
+			"          if (target) {\n"
+			"            // build params\n"
+			"            var params = [];\n"
+			"            if (payload.access_token) params.push('access_token=' + encodeURIComponent(payload.access_token));\n"
+			"            if (payload.user && payload.user.strava_id) params.push('strava_id=' + encodeURIComponent(payload.user.strava_id));\n"
+			"            if (payload.otp_key) params.push('otp_key=' + encodeURIComponent(payload.otp_key));\n"
+			"            params.push('backend_base=' + encodeURIComponent(backendBase));\n"
+			"            var paramString = params.join('&');\n"
+			"            if (" + str(include_token_in_query).lower() + ") {\n"
+			"              var sep = target.indexOf('?') === -1 ? '?' : '&';\n"
+			"              window.location.href = target + sep + paramString;\n"
+			"            } else {\n"
+			"              var sep = target.indexOf('#') === -1 ? '#' : '&';\n"
+			"              window.location.href = target + sep + paramString;\n"
+			"            }\n"
+			"          }\n"
+			"        } catch(e) { console.warn('redirect failed', e); }\n"
 			"      })();\n"
 			"    </script>\n"
 			"  </body>\n"
-			"</html>"
+			"</html>\n"
 		)
 
 		# set cookie so subsequent same-origin requests include the token without extra frontend work
