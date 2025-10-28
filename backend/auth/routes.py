@@ -1,21 +1,14 @@
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, HTTPException, Header, status
 from fastapi.responses import RedirectResponse, JSONResponse, HTMLResponse
 from dotenv import load_dotenv
 import os
 from urllib.parse import urlencode
-
-# added imports
 import requests
 from sqlalchemy.orm import Session
-from database import get_db  # ensure get_db available for debug route
+from database import get_db
 from models.user import User
-import logging
-import traceback
-import datetime
-import os
-import json
+import logging, traceback, datetime, json
 from typing import Optional
-from fastapi import HTTPException, Header, status
 
 # load .env only when explicitly requested (avoid accidentally overriding Render env vars)
 if os.getenv("LOAD_ENV_FILE", "0") == "1":
@@ -545,3 +538,20 @@ async def me(auth_header: Optional[str] = Header(None, alias="Authorization"), d
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     return {"id": user.id, "name": user.name, "strava_id": user.strava_id}
+
+
+# new: logout endpoint to tell frontend to clear stored token/state
+@router.post("/logout")
+async def logout():
+    """
+    Invalidate client-side session: server-side nothing to remove (token kept for refresh),
+    but frontend should clear stored access_token/session and show login screen.
+    """
+    return JSONResponse({"logged_out": True, "note": "Clear local token/storage on client to fully logout."})
+
+
+# Webhook and background fetching are handled centrally in:
+#   backend/routes/strava_webhook.py
+# to avoid duplication and keep auth/routes.py focused on OAuth and user endpoints.
+#
+# If other modules import these helper functions, prefer importing them from routes/strava_webhook.py.
