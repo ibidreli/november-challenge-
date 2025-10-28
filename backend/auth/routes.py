@@ -554,8 +554,8 @@ async def callback(request: Request, code: str | None = None, state: str | None 
 OTP_STORE: dict = {}
 
 # New endpoint: exchange one-time key for token (short-lived)
-@router.get("/token")
-async def fetch_token(key: Optional[str] = None, request: Optional[Request] = None, db: Session = Depends(get_db)):
+@router.get("/token", response_model=None)
+async def fetch_token(request: Request, key: Optional[str] = None, db: Session = Depends(get_db)):
      """
      Exchange a one-time key (provided by /auth/callback redirect/postMessage) for the access_token.
      Key expires after short time and is removed after use.
