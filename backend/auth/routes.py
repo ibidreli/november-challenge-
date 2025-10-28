@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends, HTTPException, Header, status
+from fastapi import APIRouter, Request, Depends
 from fastapi.responses import RedirectResponse, JSONResponse, HTMLResponse
 from dotenv import load_dotenv
 import os
@@ -14,6 +14,8 @@ import traceback
 import datetime
 import os
 import json
+from typing import Optional
+from fastapi import HTTPException, Header, status
 
 # load .env only when explicitly requested (avoid accidentally overriding Render env vars)
 if os.getenv("LOAD_ENV_FILE", "0") == "1":
