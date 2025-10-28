@@ -476,12 +476,17 @@ async def callback(request: Request, code: str | None = None, state: str | None 
 		}
 		payload_json = json.dumps(payload)
 
-		# Determine whether to include token in query (local debug) or use fragment.
-		# ensure include_token_in_query is defined to avoid NameError in the HTML builder
+		# Determine whether to include token in query (easier for frontend to read) or use fragment.
+		# Previously we only used query for localhost debug; also enable it when redirect target is the known frontend.
 		include_token_in_query = False
 		try:
-			host = request.url.hostname or ""
-			if "localhost" in (frontend_url or "") or host in ("localhost", "127.0.0.1"):
+			host = (request.url.hostname or "").lower()
+			furl = (frontend_url or "").lower()
+			# keep local-debug behavior
+			if "localhost" in furl or host in ("localhost", "127.0.0.1"):
+				include_token_in_query = True
+			# also allow direct query delivery for your deployed frontend domain so client can read location.search
+			if "november-challenge-1.onrender.com" in furl:
 				include_token_in_query = True
 		except Exception:
 			include_token_in_query = False
