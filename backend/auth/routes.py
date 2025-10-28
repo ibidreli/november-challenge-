@@ -268,27 +268,43 @@ async def callback(request: Request, code: str | None = None, state: str | None 
     - legt/aktualisiert User in der DB
     - gibt ein HTML zurück, das per postMessage das opener-window benachrichtigt und das Popup schließt.
     """
-    # frontend fallback target:
-    # 1) use FRONTEND_URL env if set (recommended)
-    # 2) otherwise accept Referer ONLY if its netloc equals the Host header (same-origin)
-    # 3) otherwise fallback to "/" to avoid redirecting to arbitrary external sites
-    frontend_url_env = os.getenv("FRONTEND_URL", "").strip()
+    # frontend fallback target (secure derivation):
+    # Priority:
+    # 1) FRONTEND_URL env (recommended and strong)
+    # 2) Origin header, if present and not equal to backend origin
+    # 3) Referer header, if present and not equal to backend origin
+    # 4) fallback to "/" to avoid redirecting to arbitrary external sites
     frontend_url = "/"
-    if frontend_url_env:
-        frontend_url = frontend_url_env
+    frontend_env = os.getenv("FRONTEND_URL", "").strip()
+    if frontend_env:
+        frontend_url = frontend_env
     else:
-        referer = request.headers.get("referer", "") or ""
         try:
             from urllib.parse import urlparse
-            if referer:
-                parsed = urlparse(referer)
-                host_header = request.headers.get("host", "") or ""
-                # accept referer only if its host matches the Host header (same origin)
-                if parsed.netloc and parsed.netloc == host_header:
-                    # keep full origin (scheme://host[:port])
-                    frontend_url = f"{parsed.scheme}://{parsed.netloc}"
+            backend_origin = None
+            host_header = request.headers.get("host", "") or ""
+            if host_header:
+                backend_origin = f"{request.url.scheme}://{host_header}"
+            # prefer Origin header when it points to a different origin than backend
+            origin = request.headers.get("origin") or ""
+            if origin:
+                o_parsed = urlparse(origin)
+                if o_parsed.scheme and o_parsed.netloc:
+                    if backend_origin is None or origin.rstrip("/") != backend_origin.rstrip("/"):
+                        frontend_url = origin
+                    else:
+                        # same as backend origin -> ignore
+                        pass
+            # next fallback: Referrer if it is a different origin than backend
+            if frontend_url == "/":
+                referer = request.headers.get("referer", "") or ""
+                if referer:
+                    r_parsed = urlparse(referer)
+                    if r_parsed.scheme and r_parsed.netloc:
+                        referer_origin = f"{r_parsed.scheme}://{r_parsed.netloc}"
+                        if backend_origin is None or referer_origin.rstrip("/") != backend_origin.rstrip("/"):
+                            frontend_url = referer_origin
         except Exception:
-            # on parse errors just use "/"
             frontend_url = "/"
 
     if not code:
