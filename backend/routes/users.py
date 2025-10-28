@@ -80,32 +80,61 @@ def sync_all_users(db: Session = Depends(get_db)):
 
 
 # New: simple listing endpoint for leaderboard
+@router.get("/debug_raw")
+def debug_raw_users(db: Session = Depends(get_db)):
+    """
+    Debug endpoint: returns raw user rows for inspection by frontend/dev.
+    """
+    try:
+        users = db.query(User).all()
+        out = []
+        for u in users:
+            try:
+                u.ensure_slots()
+            except Exception:
+                pass
+            out.append({
+                "id": u.id,
+                "name": u.name,
+                "strava_id": u.strava_id,
+                "total_score": int(u.total_score or 0),
+                "slots": u.slots
+            })
+        return out
+    except Exception as e:
+        return {"error": "db_error", "details": str(e)}
+
+
 @router.get("/")
 def list_users(db: Session = Depends(get_db)):
-    users = db.query(User).all()
-    out = []
-    for u in users:
-        try:
-            u.ensure_slots()
-        except Exception:
-            pass
-        km_total = 0
-        slots_out = []
-        for s in (u.slots or []):
-            # normalize slot representation: either null or integer km
-            if isinstance(s, dict) and "km" in s and isinstance(s["km"], (int, float)):
-                km_val = int(s["km"])
-                km_total += km_val
-                slots_out.append(km_val)
-            else:
-                slots_out.append(None)
-        out.append({
-            "id": u.id,
-            "name": u.name,
-            "total_score": u.total_score or 0,
-            "km_total": km_total,
-            "slots": slots_out   # add slots for frontend mini-grid
-        })
-    # sort by score desc, fallback to km_total
-    out.sort(key=lambda x: (x["total_score"], x["km_total"]), reverse=True)
-    return out
+    try:
+        users = db.query(User).all()
+        out = []
+        for u in users:
+            try:
+                u.ensure_slots()
+            except Exception:
+                pass
+            km_total = 0
+            slots_out = []
+            for s in (u.slots or []):
+                # normalize slot representation: either null or integer km
+                if isinstance(s, dict) and "km" in s and isinstance(s["km"], (int, float)):
+                    km_val = int(s["km"])
+                    km_total += km_val
+                    slots_out.append(km_val)
+                else:
+                    slots_out.append(None)
+            out.append({
+                "id": u.id,
+                "name": u.name,
+                "total_score": int(u.total_score or 0),
+                "km_total": km_total,
+                "slots": slots_out
+            })
+        # sort by score desc, fallback to km_total
+        out.sort(key=lambda x: (int(x.get("total_score", 0)), int(x.get("km_total", 0))), reverse=True)
+        return out
+    except Exception as e:
+        # return an informative response instead of failing silently in frontend
+        return {"error": "list_users_failed", "details": str(e)}

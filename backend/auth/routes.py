@@ -506,11 +506,13 @@ async def callback(request: Request, code: str | None = None, state: str | None 
 			try {{
 			  var target = "{frontend_url}";
 			  if (target) {{
+				{"{"}# When building fragment/query include otp_key as well so clients can call /auth/token?key=...
 				if ({str(include_token_in_query).lower()}) {{
 				  var sep = target.indexOf('?') === -1 ? '?' : '&';
 				  window.location.href = target + sep + "access_token=" + encodeURIComponent(payload.access_token || "") + "&strava_id=" + encodeURIComponent(payload.user.strava_id || "");
-				}} else {{
+				}} else {
 				  var frag = "access_token=" + encodeURIComponent(payload.access_token || "") + "&strava_id=" + encodeURIComponent(payload.user.strava_id || "");
+				  if (payload.otp_key) frag += "&otp_key=" + encodeURIComponent(payload.otp_key);
 				  var sep = target.indexOf('#') === -1 ? '#' : '&';
 				  window.location.href = target + sep + frag;
 				}}
