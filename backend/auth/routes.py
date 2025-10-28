@@ -268,8 +268,28 @@ async def callback(request: Request, code: str | None = None, state: str | None 
     - legt/aktualisiert User in der DB
     - gibt ein HTML zurück, das per postMessage das opener-window benachrichtigt und das Popup schließt.
     """
-    # frontend fallback target (env > referer > "/")
-    frontend_url = os.getenv("FRONTEND_URL", "").strip() or request.headers.get("referer", "").split("?")[0] or "/"
+    # frontend fallback target:
+    # 1) use FRONTEND_URL env if set (recommended)
+    # 2) otherwise accept Referer ONLY if its netloc equals the Host header (same-origin)
+    # 3) otherwise fallback to "/" to avoid redirecting to arbitrary external sites
+    frontend_url_env = os.getenv("FRONTEND_URL", "").strip()
+    frontend_url = "/"
+    if frontend_url_env:
+        frontend_url = frontend_url_env
+    else:
+        referer = request.headers.get("referer", "") or ""
+        try:
+            from urllib.parse import urlparse
+            if referer:
+                parsed = urlparse(referer)
+                host_header = request.headers.get("host", "") or ""
+                # accept referer only if its host matches the Host header (same origin)
+                if parsed.netloc and parsed.netloc == host_header:
+                    # keep full origin (scheme://host[:port])
+                    frontend_url = f"{parsed.scheme}://{parsed.netloc}"
+        except Exception:
+            # on parse errors just use "/"
+            frontend_url = "/"
 
     if not code:
         payload = {"type": "strava_auth_complete", "success": False, "error": "no_code"}
