@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, HTTPException, Header, status
 from fastapi.responses import RedirectResponse, JSONResponse, HTMLResponse
 from dotenv import load_dotenv
 import os
@@ -514,3 +514,32 @@ async def debug_auth_config(request: Request, db = Depends(get_db)):
         "DATABASE_URL_masked": _mask_url(os.getenv("DATABASE_URL", "")),
         "notes": "If used_redirect_uri contains localhost, set STRAVA_REDIRECT_URI to your Render domain in the service env vars."
     }
+
+
+# new helper: resolve user from Authorization header (Bearer <token>)
+def get_user_from_authorization(auth_header: Optional[str], db: Session) -> Optional[User]:
+    if not auth_header:
+        return None
+    token = auth_header.strip()
+    if token.lower().startswith("bearer "):
+        token = token[7:].strip()
+    if not token:
+        return None
+    try:
+        return db.query(User).filter_by(access_token=token).first()
+    except Exception:
+        logging.exception("DB error while resolving user from token")
+        return None
+
+
+# new endpoint: /auth/me
+@router.get("/me")
+async def me(auth_header: Optional[str] = Header(None, alias="Authorization"), db: Session = Depends(get_db)):
+    """
+    Liefert den aktuell angemeldeten Benutzer basierend auf Authorization: Bearer <access_token>.
+    Wenn kein gültiges Token übergeben wurde, wird 401 zurückgegeben (Frontend zeigt dann Login).
+    """
+    user = get_user_from_authorization(auth_header, db)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    return {"id": user.id, "name": user.name, "strava_id": user.strava_id}
