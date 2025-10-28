@@ -236,31 +236,33 @@ def _startup_log():
 @app.get("/debug/config")
 @app.get("/auth/debug/config")
 def debug_config(request: Request):
-    def _mask_url(u: str) -> str:
-        if not u:
-            return "(not set)"
-        try:
-            if "@" in u and ":" in u.split("@")[0]:
-                userinfo, hostinfo = u.split("@", 1)
-                user = userinfo.split(":", 1)[0]
-                return f"{user}:***@{hostinfo}"
-        except Exception:
-            pass
-        return u if len(u) < 120 else u[:80] + "..."
+     def _mask_url(u: str) -> str:
+         if not u:
+             return "(not set)"
+         try:
+             if "@" in u and ":" in u.split("@")[0]:
+                 userinfo, hostinfo = u.split("@", 1)
+                 user = userinfo.split(":", 1)[0]
+                 return f"{user}:***@{hostinfo}"
+         except Exception:
+             pass
+         return u if len(u) < 120 else u[:80] + "..."
 
-    env_redirect = os.getenv("STRAVA_REDIRECT_URI", "")
-    if env_redirect.strip() and not env_redirect.strip().lower().startswith((
-        "http://localhost", "https://localhost", "http://127.0.0.1", "https://127.0.0.1"
-    )):
-        used_redirect = env_redirect
-    else:
-        used_redirect = str(request.base_url).rstrip("/") + "/auth/callback"
+     env_redirect = os.getenv("STRAVA_REDIRECT_URI", "")
+     if env_redirect.strip() and not env_redirect.strip().lower().startswith((
+         "http://localhost", "https://localhost", "http://127.0.0.1", "https://127.0.0.1"
+     )):
+         used_redirect = env_redirect
+     else:
+         used_redirect = str(request.base_url).rstrip("/") + "/auth/callback"
 
-    return {
-        "used_redirect_uri": used_redirect,
-        "env_STRAVA_REDIRECT_URI_masked": _mask_url(env_redirect),
-        "STRAVA_CLIENT_ID_set": bool(os.getenv("STRAVA_CLIENT_ID")),
-        "DATABASE_URL_masked": _mask_url(os.getenv("DATABASE_URL", "")),
-        "DB_AVAILABLE": DB_AVAILABLE,
-        "notes": "If DB_AVAILABLE is false, check /debug/nodb and your Render service logs."
-    }
+     return {
+         "used_redirect_uri": used_redirect,
+         "env_STRAVA_REDIRECT_URI_masked": _mask_url(env_redirect),
+         "STRAVA_CLIENT_ID_set": bool(os.getenv("STRAVA_CLIENT_ID")),
+         "DATABASE_URL_masked": _mask_url(os.getenv("DATABASE_URL", "")),
+         # actual backend base URL as seen by the running process (use this as API base in frontend)
+         "backend_base_url": str(request.base_url).rstrip("/"),
+         "DB_AVAILABLE": DB_AVAILABLE,
+         "notes": "If DB_AVAILABLE is false, check /debug/nodb and your Render service logs."
+     }
