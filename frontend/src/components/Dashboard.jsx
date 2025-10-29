@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 
+axios.defaults.withCredentials = true;
+
+
 export default function Dashboard({ refreshKey = 0 }) {
   const [view, setView] = useState("personal"); // "personal" | "public"
   const [user, setUser] = useState(null);
@@ -16,7 +19,7 @@ export default function Dashboard({ refreshKey = 0 }) {
     setLoading(true);
     try {
       const [u, lb] = await Promise.all([
-        axios.get(`${backendBase}/users/me`).then(r => r.data).catch(() => null),
+        axios.get(`${backendBase}/users/me`, { withCredentials: true }).then(r => r.data).catch(() => null),
         axios.get(`${backendBase}/users`).then(r => r.data).catch(() => [])
       ]);
       setUser(u && u.name ? u : null);

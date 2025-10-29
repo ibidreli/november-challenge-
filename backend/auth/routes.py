@@ -271,7 +271,10 @@ async def callback(request: Request, code: str | None = None, state: str | None 
 	try:
 		# frontend target: prefer explicit FRONTEND_URL env. If missing, map known backend -> frontend pair.
 		# This avoids redirecting to arbitrary/third-party referer/origin hosts (e.g. Google).
+		
 		frontend_url = os.getenv("FRONTEND_URL", "").strip()
+		backend_base = str(request.base_url).rstrip("/")
+
 		if not frontend_url:
 			# safe, explicit mapping for your deployment:
 			try:
@@ -475,6 +478,7 @@ async def callback(request: Request, code: str | None = None, state: str | None 
 			"otp_key": otp_key
 		}
 		payload_json = json.dumps(payload)
+    
 
 		# Determine whether to include token in query (easier for frontend to read) or use fragment.
 		# Previously we only used query for localhost debug; also enable it when redirect target is the known frontend.
@@ -493,6 +497,9 @@ async def callback(request: Request, code: str | None = None, state: str | None 
 
 		# Build HTML safely by injecting JSON‑escaped values for frontend/ backend URLs
 		frontend_js = json.dumps(frontend_url)
+		# add this near the top of the callback(), after frontend_url is decided
+  
+
 		backend_js = json.dumps(backend_base)
 		include_token_js = "true" if include_token_in_query else "false"
 
