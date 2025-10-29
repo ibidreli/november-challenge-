@@ -7,53 +7,28 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [syncing, setSyncing] = useState(false);
 
-  // Beim App-Start: alle Nutzer/Activities synchronisieren (Backend zieht via Strava)
+  // Beim App-Start/Reload: alle Nutzer/Activities synchronisieren (Server holt neu von Strava)
   useEffect(() => {
     let cancelled = false;
 
     async function initialSync() {
       try {
         setSyncing(true);
-        // Server-seitiger Sync: zieht für alle Nutzer die neuesten Aktivitäten
         await axios.post("/users/sync_all", null, { withCredentials: true });
       } catch (e) {
-        // unkritisch — UI lädt trotzdem
         console.warn("Initial sync_all failed:", e);
       } finally {
         if (!cancelled) {
           setSyncing(false);
-          // Dashboard neu laden (damit Rangliste & persönliche Ansicht aktuell sind)
-          setRefreshKey((k) => k + 1);
+          setRefreshKey((k) => k + 1); // Dashboard nach Sync neu laden
         }
       }
     }
 
     initialSync();
-
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  // Optional: wenn der Tab wieder sichtbar wird, kurz neu synchronisieren & refreshen
-  useEffect(() => {
-    let running = false;
-
-    async function syncOnFocus() {
-      if (document.visibilityState !== "visible" || running) return;
-      running = true;
-      try {
-        await axios.post("/users/sync_all", null, { withCredentials: true });
-      } catch (e) {
-        // ok
-      } finally {
-        setRefreshKey((k) => k + 1);
-        running = false;
-      }
-    }
-
-    document.addEventListener("visibilitychange", syncOnFocus);
-    return () => document.removeEventListener("visibilitychange", syncOnFocus);
   }, []);
 
   return (
@@ -67,9 +42,8 @@ export default function App() {
           </div>
         </div>
         <nav className="header-nav">
-          <a>Dashboard</a> {/* keep only Dashboard nav */}
+          <a>Dashboard</a>
         </nav>
-        {/* header-right removed to avoid duplicate Connect button */}
       </header>
 
       <main className="container" style={{ marginTop: 20 }}>
