@@ -491,20 +491,10 @@ async def callback(request: Request, code: str | None = None, state: str | None 
 		except Exception:
 			include_token_in_query = False
 
-		# Build HTML that:
-		#  - posts message to opener (popup flow),
-		#  - ensures server-side /auth/token is invoked (same-origin) to set backend cookie before redirect,
-		#  - redirects to frontend and includes backend_base so frontend can use correct https backend.
-		# Determine backend base URL using forwarded headers when available so we don't emit http behind an https proxy.
-		try:
-			proto = (request.headers.get("x-forwarded-proto") or request.url.scheme or "").lower()
-			host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc or "").strip()
-			if not proto or proto not in ("http", "https"):
-				# be conservative: prefer https when unknown
-				proto = "https"
-			backend_base = os.getenv("BACKEND_BASE_URL", "").strip() or (f"{proto}://{host.rstrip('/')}" if host else str(request.base_url).rstrip("/"))
-		except Exception:
-			backend_base = os.getenv("BACKEND_BASE_URL", "") or str(request.base_url).rstrip("/")
+		# Build HTML safely by injecting JSON‑escaped values for frontend/ backend URLs
+		frontend_js = json.dumps(frontend_url)
+		backend_js = json.dumps(backend_base)
+		include_token_js = "true" if include_token_in_query else "false"
 
 		html = (
 			"<!doctype html>\n"
@@ -512,56 +502,41 @@ async def callback(request: Request, code: str | None = None, state: str | None 
 			"  <head><meta charset=\"utf-8\" /></head>\n"
 			"  <body>\n"
 			"    <p>Authentication complete. This window will close.</p>\n"
-			"    <p>If the window does not close automatically, <a id=\"return\" href=\"" + frontend_url + "\">click here to return to the app</a>.</p>\n"
+			"    <p>If the window does not close automatically, <a id=\"return\" href=" + frontend_js + ">click here to return to the app</a>.</p>\n"
 			"    <script>\n"
 			"      (async function(){\n"
 			"        var payload = " + payload_json + ";\n"
-			"        try {\n"
-			"          if (window.opener && !window.opener.closed) {\n"
-			"            window.opener.postMessage(payload, \"*\");\n"
-			"            try { window.close(); return; } catch(e) { /* ignored */ }\n"
-			"          }\n"
-			"        } catch(e) {}\n"
-			"        // If we have an otp_key, exchange it with the backend on THIS origin to set cookie\n"
+			"        try { if (window.opener && !window.opener.closed) { window.opener.postMessage(payload, '*'); try { window.close(); return; } catch(e){} } } catch(e){}\n"
 			"        try {\n"
 			"          if (payload.otp_key) {\n"
-			"            try {\n"
-			"              // call same-origin backend endpoint to set cookie (must be called from backend origin)\n"
-			"              await fetch('/auth/token?key=' + encodeURIComponent(payload.otp_key), { method: 'GET', credentials: 'include' });\n"
-			"            } catch(e) {\n"
-			"              console.warn('Backend token exchange failed:', e);\n"
-			"              // continue to redirect anyway; frontend can still try exchange if needed\n"
-			"            }\n"
+			"            try { await fetch('/auth/token?key=' + encodeURIComponent(payload.otp_key), { method: 'GET', credentials: 'include' }); } catch(e) { console.warn('Backend token exchange failed:', e); }\n"
 			"          }\n"
 			"        } catch(e) { console.warn('otp exchange error', e); }\n"
 			"        try {\n"
-			"          var target = \"" + frontend_url + "\";\n"
-			"          var backendBase = \"" + backend_base + "\";\n"
-			# ensure an explicit HTTPS backend base is provided to clients (avoid proxy http->https confusion)
-+            "            var backendBaseHttps = backendBase.indexOf('http://') === 0 ? backendBase.replace('http://','https://') : backendBase;\n"
-             "          if (target) {\n"
-             "            // build params\n"
-             "            var params = [];\n"
-             "            if (payload.access_token) params.push('access_token=' + encodeURIComponent(payload.access_token));\n"
-             "            if (payload.user && payload.user.strava_id) params.push('strava_id=' + encodeURIComponent(payload.user.strava_id));\n             "            if (payload.otp_key) params.push('otp_key=' + encodeURIComponent(payload.otp_key));\n"
--            "            params.push('backend_base=' + encodeURIComponent(backendBase));\n"
-+            "            params.push('backend_base=' + encodeURIComponent(backendBase));\n"
-+            "            // explicit https version so frontend does not mistakenly use http\n"
-+            "            params.push('backend_base_https=' + encodeURIComponent(backendBaseHttps));\n"
-             "            var paramString = params.join('&');\n"
-             "            if (" + str(include_token_in_query).lower() + ") {\n"
-             "              var sep = target.indexOf('?') === -1 ? '?' : '&';\n"
-             "              window.location.href = target + sep + paramString;\n"
-             "            } else {\n"
-             "              var sep = target.indexOf('#') === -1 ? '#' : '&';\n"
-             "              window.location.href = target + sep + paramString;\n"
-             "            }\n"
-             "          }\n"
-             "        } catch(e) { console.warn('redirect failed', e); }\n"
-             "      })();\n"
-             "    </script>\n"
-             "  </body>\n"
-             "</html>\n"
+			"          var target = " + frontend_js + ";\n"
+			"          var backendBase = " + backend_js + ";\n"
+			"          var backendBaseHttps = backendBase.indexOf('http://') === 0 ? backendBase.replace('http://','https://') : backendBase;\n"
+			"          if (target) {\n"
+			"            var params = [];\n"
+			"            if (payload.access_token) params.push('access_token=' + encodeURIComponent(payload.access_token));\n"
+			"            if (payload.user && payload.user.strava_id) params.push('strava_id=' + encodeURIComponent(payload.user.strava_id));\n"
+			"            if (payload.otp_key) params.push('otp_key=' + encodeURIComponent(payload.otp_key));\n"
+			"            params.push('backend_base=' + encodeURIComponent(backendBase));\n"
+			"            params.push('backend_base_https=' + encodeURIComponent(backendBaseHttps));\n"
+			"            var paramString = params.join('&');\n"
+			"            if (" + include_token_js + ") {\n"
+			"              var sep = target.indexOf('?') === -1 ? '?' : '&';\n"
+			"              window.location.href = target + sep + paramString;\n"
+			"            } else {\n"
+			"              var sep = target.indexOf('#') === -1 ? '#' : '&';\n"
+			"              window.location.href = target + sep + paramString;\n"
+			"            }\n"
+			"          }\n"
+			"        } catch(e) { console.warn('redirect failed', e); }\n"
+			"      })();\n"
+			"    </script>\n"
+			"  </body>\n"
+			"</html>\n"
 		)
 
 		# set cookie so subsequent same-origin requests include the token without extra frontend work
