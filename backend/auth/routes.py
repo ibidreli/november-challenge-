@@ -555,7 +555,7 @@ async def fetch_token(request: Request, key: Optional[str] = None, db: Session =
 
          # Set cookie (httponly + secure if applicable)
          resp = JSONResponse({"access_token": access_token})
-         resp.set_cookie("access_token", access_token, samesite="lax", httponly=True, secure=secure_flag, max_age=60*60*24)
+         resp.set_cookie("access_token", access_token, samesite="none", httponly=True, secure=True, max_age=60*60*24)         
          return resp
      except Exception:
          logging.exception("Token exchange failed")
