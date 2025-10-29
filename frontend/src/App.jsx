@@ -41,9 +41,6 @@ export default function App() {
             <div className="title-sub">Monthly running challenge</div>
           </div>
         </div>
-        <nav className="header-nav">
-          <a>Dashboard</a>
-        </nav>
       </header>
 
       <main className="container" style={{ marginTop: 20 }}>
