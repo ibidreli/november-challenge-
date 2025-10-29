@@ -13,11 +13,16 @@ import requests
 import uuid
 import time
 
+
 # load .env only when explicitly requested (avoid accidentally overriding Render env vars)
 if os.getenv("LOAD_ENV_FILE", "0") == "1":
     load_dotenv()
 
+
 router = APIRouter()
+
+OTP_STORE: dict = {}
+
 
 # add: use CHALLENGE_MONTH env (default 11)
 CHALLENGE_MONTH = int(os.getenv("CHALLENGE_MONTH", "11"))
