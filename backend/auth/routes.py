@@ -474,7 +474,7 @@ async def callback(
             "      (async function(){\n"
             "        var payload = " + payload_json + ";\n"
             "        try { if (window.opener && !window.opener.closed) { window.opener.postMessage(payload, '*'); try { window.close(); return; } catch(e){} } } catch(e){}\n"
-            "        try { if (payload.otp_key) { await fetch(backendBaseHttps + '/auth/token?key=' + encodeURIComponent(payload.otp_key), { method:'GET', credentials:'include', mode:'cors' }); } } catch(e){}\n"
+            "        try { if (payload.otp_key) { await fetch(backendBaseHttps + '/auth/token?key=' + encodeURIComponent(payload.otp_key), { method: 'GET', credentials: 'include', mode: 'cors' }); } } catch(e) { console.warn('Backend token exchange failed:', e); }\n"
             "        try {\n"
             "          var target = " + frontend_js + ";\n"
             "          var backendBase = " + backend_js + ";\n"
