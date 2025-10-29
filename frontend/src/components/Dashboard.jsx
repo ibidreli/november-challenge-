@@ -19,8 +19,8 @@ export default function Dashboard({ refreshKey = 0 }) {
     setLoading(true);
     try {
       const [u, lb] = await Promise.all([
-        axios.get(`${backendBase}/users/me`, { withCredentials: true }).then(r => r.data).catch(() => null),
-        axios.get(`${backendBase}/users`).then(r => r.data).catch(() => [])
+        axios.get(`/users/me`, { withCredentials: true }).then(r => r.data).catch(() => null),
+        axios.get(`/users`).then(r => r.data).catch(() => [])
       ]);
       setUser(u && u.name ? u : null);
 

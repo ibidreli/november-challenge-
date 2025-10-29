@@ -474,7 +474,7 @@ async def callback(
             "      (async function(){\n"
             "        var payload = " + payload_json + ";\n"
             "        try { if (window.opener && !window.opener.closed) { window.opener.postMessage(payload, '*'); try { window.close(); return; } catch(e){} } } catch(e){}\n"
-            "        try { if (payload.otp_key) { await fetch('/auth/token?key=' + encodeURIComponent(payload.otp_key), { method:'GET', credentials:'include' }); } } catch(e){}\n"
+            "        try { if (payload.otp_key) { await fetch(backendBaseHttps + '/auth/token?key=' + encodeURIComponent(payload.otp_key), { method:'GET', credentials:'include', mode:'cors' }); } } catch(e){}\n"
             "        try {\n"
             "          var target = " + frontend_js + ";\n"
             "          var backendBase = " + backend_js + ";\n"
@@ -504,14 +504,7 @@ async def callback(
 
         # 9) Cookie setzen (Cross-Site-fähig)
         resp = HTMLResponse(content=html)
-        resp.set_cookie(
-            "access_token",
-            access_token or "",
-            samesite="none",   # wichtig für Cross-Site
-            httponly=True,     # JS kann Cookie nicht auslesen (sicherer)
-            secure=True,       # Pflicht bei SameSite=None
-            max_age=60*60*24,
-        )
+        resp.set_cookie("access_token", access_token or "", samesite="none", httponly=True, secure=True, max_age=60*60*24)
         return resp
 
     except Exception as e:
