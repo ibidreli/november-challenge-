@@ -136,6 +136,40 @@ else:
 		)
 		return HTMLResponse(content=html, status_code=503)
 
+	@app.get("/auth/callback")
+	def fallback_auth_callback():
+		# Provide a helpful HTML page when the OAuth callback route is unavailable due to startup error.
+		trace = DB_IMPORT_ERROR or "(no traceback captured)"
+		trace_short = trace if len(trace) <= 2000 else trace[:2000] + "\n\n...(truncated)"
+		html = (
+			"<!doctype html><html><head><meta charset='utf-8'><title>Auth Callback unavailable</title></head>"
+			"<body style='font-family:Arial,sans-serif;padding:20px'>"
+			"<h2>Auth Callback nicht verfügbar</h2>"
+			"<p>Der OAuth‑Callback ist derzeit nicht registriert, weil beim Start ein Fehler aufgetreten ist.</p>"
+			"<h3>Kurze Traceback‑Vorschau</h3>"
+			"<pre style='background:#f6f6f6;padding:10px;border-radius:4px;white-space:pre-wrap;max-height:420px;overflow:auto;'>"
+			+ trace_short.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;") +
+			"</pre>"
+			"<p>Weitere Schritte:</p>"
+			"<ol>"
+			"<li>Rufe <a href='/debug/nodb'>/debug/nodb</a> auf, um den vollständigen Traceback zu sehen.</li>"
+			"<li>Prüfe die Umgebungsvariablen (insb. <code>DATABASE_URL</code>) und die Server‑Logs.</li>"
+			"</ol>"
+			"</body></html>"
+		)
+		return HTMLResponse(content=html, status_code=503)
+
+	@app.get("/auth/token")
+	def fallback_auth_token():
+		# Fallback for token exchange endpoint (when auth router not loaded)
+		return JSONResponse(
+			status_code=503,
+			content={
+				"error": "service_unavailable",
+				"reason": "auth token endpoint unavailable because server failed to register auth router at startup",
+				"hint": "Check /debug/nodb and Render logs for the startup traceback"
+			}
+		)
 
 @app.get("/")
 def root():
