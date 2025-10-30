@@ -38,7 +38,7 @@ export default function App() {
           <img src={logo} alt="November Challenge" className="logo" />
           <div className="app-title">
             <div className="title-main">November Challenge</div>
-            <div className="title-sub">Monthly running challenge</div>
+            <div className="title-sub">Monatliche Running Challenge</div>
           </div>
         </div>
       </header>
@@ -46,7 +46,7 @@ export default function App() {
       <main className="container" style={{ marginTop: 20 }}>
         {syncing && (
           <div style={{ marginBottom: 8, color: "#666", fontSize: 14 }}>
-            Aktualisiere Aktivitäten…
+            Aktualisiere Aktivitäten
           </div>
         )}
         <Dashboard refreshKey={refreshKey} />

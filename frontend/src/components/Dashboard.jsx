@@ -61,6 +61,8 @@ export default function Dashboard({ refreshKey = 0 }) {
     }, 0);
   };
 
+  const daysFromSlots = (slots) => Array.isArray(slots) ? slots.filter(Boolean).length : 0;
+
   const PersonalGrid = ({ slots }) => {
     const arr = Array.isArray(slots)
       ? slots
@@ -177,12 +179,8 @@ export default function Dashboard({ refreshKey = 0 }) {
                 >
                   <div>
                     <div style={{ fontWeight: 700 }}>{user.name}</div>
-                    <div style={{ color: "#444" }}>
-                      Punkte: {user.total_score ?? 0}
-                    </div>
-                    <div style={{ color: "#444" }}>
-                      Monatliche Kilometer: {kmFromSlots(user.slots)}
-                    </div>
+                    <div style={{ color:"#444" }}>Tage: {daysFromSlots(user.slots)}</div>
+                    <div style={{ color: "#444" }}>Score: {kmFromSlots(user.slots)}</div>
                   </div>
                 </div>
 
@@ -241,7 +239,7 @@ export default function Dashboard({ refreshKey = 0 }) {
                       <div>
                         <div style={{ fontWeight: 700 }}>{p.name}</div>
                         <div style={{ fontSize: 13, color: "#666" }}>
-                          km: {p.km_total} • score: {p.total_score}
+                          Tage: {p.slots} • Score: {p.total_score}
                         </div>
                       </div>
                     </div>
