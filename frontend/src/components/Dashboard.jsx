@@ -14,8 +14,9 @@ export default function Dashboard({ refreshKey = 0 }) {
     try {
       const [u, lb] = await Promise.all([
   axios.get('/users/me').then(r => r.data).catch((e) => { console.warn('GET /users/me failed', e); return null; }),
-  axios.get('/users/').then(r => r.data).catch((e) => { console.warn('GET /users/ failed', e); return []; })
+  axios.get('/users/', { withCredentials: false }).then(r => r.data).catch((e) => { console.warn('GET /users/ failed', e); return []; })
 ]);
+
 
       setUser(u && u.name ? u : null);
 
