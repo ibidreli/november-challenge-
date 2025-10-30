@@ -61,7 +61,19 @@ export default function Dashboard({ refreshKey = 0 }) {
     }, 0);
   };
 
-  const daysFromSlots = (slots) => Array.isArray(slots) ? slots.filter(Boolean).length : 0;
+  // replace your daysFromSlots with this:
+  const daysFromSlots = (slots) => {
+    if (!Array.isArray(slots)) return 0;
+    return slots.reduce((n, s) => {
+      if (!s) return n;
+      if (typeof s === "number") return s > 0 ? n + 1 : n;
+      if (typeof s === "object") {
+        const km = Number(s.km ?? 0);
+        return km > 0 ? n + 1 : n;
+      }
+      return n;
+    }, 0);
+  };
 
   const PersonalGrid = ({ slots }) => {
     const arr = Array.isArray(slots)
@@ -239,7 +251,7 @@ export default function Dashboard({ refreshKey = 0 }) {
                       <div>
                         <div style={{ fontWeight: 700 }}>{p.name}</div>
                         <div style={{ fontSize: 13, color: "#666" }}>
-                          Tage: {p.slots} • Score: {p.total_score}
+                          Tage: {p.slots} Score: {p.total_score}
                         </div>
                       </div>
                     </div>
