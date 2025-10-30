@@ -251,7 +251,7 @@ export default function Dashboard({ refreshKey = 0 }) {
                       <div>
                         <div style={{ fontWeight: 700 }}>{p.name}</div>
                         <div style={{ fontSize: 13, color: "#666" }}>
-                          Tage: {p.slots} Score: {p.total_score}
+                          Tage: {daysFromSlots(p.slots)} Score: {p.total_score}
                         </div>
                       </div>
                     </div>
