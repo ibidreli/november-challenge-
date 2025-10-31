@@ -10,8 +10,6 @@ import logging
 import traceback
 from fastapi.responses import JSONResponse, HTMLResponse
 from urllib.parse import urlparse
-from routes import routes  # was du bereits hast
-
 
 
 
