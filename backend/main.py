@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 import os
 import logging
 import traceback
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from urllib.parse import urlparse
 
 
@@ -91,6 +91,20 @@ else:
 		return {"db_import_error": DB_IMPORT_ERROR or "(no traceback captured)"}
 
 	# --- NEW: friendly fallback endpoints so frontend calls don't get 404 ---
+
+	# Fallback: redirect /admin (and subpaths) to the frontend admin UI so direct links work.
+	@app.get("/admin")
+	def fallback_admin_root():
+		frontend_url = os.getenv("FRONTEND_URL", "").strip() or "/"
+		target = frontend_url.rstrip("/") + "/admin"
+		# Use a 302 redirect to the frontend admin UI (keeps browser on HTTPS frontend)
+		return RedirectResponse(url=target)
+	
+	@app.get("/admin/{path:path}")
+	def fallback_admin_catchall(path: str):
+		frontend_url = os.getenv("FRONTEND_URL", "").strip() or "/"
+		target = frontend_url.rstrip("/") + "/admin"
+		return RedirectResponse(url=target)
 
 	@app.get("/users/me")
 	def fallback_users_me():
