@@ -13,14 +13,28 @@ export default function Dashboard({ refreshKey = 0 }) {
     setLoading(true);
     try {
       const [u, lb] = await Promise.all([
-  axios.get('/users/me').then(r => r.data).catch((e) => { console.warn('GET /users/me failed', e); return null; }),
-  axios.get('/users/', { withCredentials: false }).then(r => r.data).catch((e) => { console.warn('GET /users/ failed', e); return []; })
-]);
-
+        axios
+          .get("/users/me")
+          .then((r) => r.data)
+          .catch((e) => {
+            console.warn("GET /users/me failed", e);
+            return null;
+          }),
+        // Cache-Busting für die Rangliste -> immer frisch beim Reload
+        axios
+          .get("/users/", { withCredentials: false, params: { t: Date.now() } })
+          .then((r) => r.data)
+          .catch((e) => {
+            console.warn("GET /users/ failed", e);
+            return [];
+          }),
+      ]);
 
       setUser(u && u.name ? u : null);
 
       const lbArr = Array.isArray(lb) ? lb : [];
+      // Fallback: Wenn öffentliches LB leer ist, aber User vorhanden,
+      // zeige wenigstens dessen Slots/Score an.
       if (lbArr.length === 0 && u && u.name) {
         const slots = Array.isArray(u.slots)
           ? u.slots.map((s) =>
@@ -49,6 +63,7 @@ export default function Dashboard({ refreshKey = 0 }) {
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey]);
 
   const kmFromSlots = (slots) => {
@@ -61,7 +76,7 @@ export default function Dashboard({ refreshKey = 0 }) {
     }, 0);
   };
 
-  // replace your daysFromSlots with this:
+  // Anzahl Tage mit >0 km
   const daysFromSlots = (slots) => {
     if (!Array.isArray(slots)) return 0;
     return slots.reduce((n, s) => {
@@ -172,7 +187,9 @@ export default function Dashboard({ refreshKey = 0 }) {
                 <div className="not-logged-action">
                   <a
                     className="btn primary"
-                    href={`${window.__API_BASE__ || axios.defaults.baseURL}/auth/login`}
+                    href={`${
+                      window.__API_BASE__ || axios.defaults.baseURL
+                    }/auth/login`}
                   >
                     Connect with Strava
                   </a>
@@ -191,8 +208,12 @@ export default function Dashboard({ refreshKey = 0 }) {
                 >
                   <div>
                     <div style={{ fontWeight: 700 }}>{user.name}</div>
-                    <div style={{ color:"#444" }}>Tage: {daysFromSlots(user.slots)}</div>
-                    <div style={{ color: "#444" }}>Score: {kmFromSlots(user.slots)}</div>
+                    <div style={{ color: "#444" }}>
+                      Tage: {daysFromSlots(user.slots)}
+                    </div>
+                    <div style={{ color: "#444" }}>
+                      Score: {kmFromSlots(user.slots)}
+                    </div>
                   </div>
                 </div>
 
@@ -215,7 +236,7 @@ export default function Dashboard({ refreshKey = 0 }) {
               <div style={{ display: "grid", gap: 8 }}>
                 {leaderboard.map((p, idx) => (
                   <div
-                    key={p.id}
+                    key={p.id ?? `${p.name}-${idx}`}
                     className="leader-row"
                     style={{
                       display: "flex",
@@ -251,9 +272,9 @@ export default function Dashboard({ refreshKey = 0 }) {
                       <div>
                         <div style={{ fontWeight: 700 }}>{p.name}</div>
                         <div style={{ fontSize: 13, color: "#666" }}>
-                                <div>Tage: {daysFromSlots(p.slots)}</div>
-                                <div>Score: {p.total_score}</div>
-                                </div>
+                          <div>Tage: {daysFromSlots(p.slots)}</div>
+                          <div>Score: {p.total_score}</div>
+                        </div>
                       </div>
                     </div>
 

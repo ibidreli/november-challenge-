@@ -14,7 +14,7 @@ export default function App() {
     async function initialSync() {
       try {
         setSyncing(true);
-        await axios.post("/users/sync_all", null, { withCredentials: true });
+        await axios.post("/users/sync_all", null, { withCredentials: false });
       } catch (e) {
         console.warn("Initial sync_all failed:", e);
       } finally {

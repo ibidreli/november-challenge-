@@ -174,7 +174,7 @@ button { cursor: pointer; border-radius: 6px; border: 1px solid rgba(0,0,0,0.06)
 .personal-cell.filled {
   background: linear-gradient(180deg, var(--tile-filled-start), var(--tile-filled-end));
   border: 1px solid var(--tile-border);
-  color: #fff;
+  color: #111;
 }
 .personal-cell.filled:hover { transform: translateY(-4px); }
 
@@ -182,7 +182,7 @@ button { cursor: pointer; border-radius: 6px; border: 1px solid rgba(0,0,0,0.06)
 .personal-cell .cell-day {
   position: static; margin: 0; font-weight:700; font-size:14px;
   display:flex; align-items:center; justify-content:center;
-  color:#fff; /* besserer Kontrast auf Teal */
+  color:#111; /* besserer Kontrast auf Teal */
 }
 /* hide km pill (wir nutzen Tooltip/Text) */
 .personal-cell .cell-km { display: none; }
