@@ -130,8 +130,11 @@ def process_by_strava(strava_activity_id: int, owner_strava_id: int | None = Non
             return {"status": "error_fetching_activity", "code": r.status_code, "text": r.text}
         data = r.json()
         # ignore non-Run activities
-        if (data.get("type") or "").lower() != "run":
-            return {"status": "ignored_non_run", "type": data.get("type")}
+        # Accept: Run, Trail Run, Virtual Run
+        activity_type = (data.get("type") or "").lower().strip()
+        allowed_types = ["run", "trail run", "virtual run"]
+        if activity_type not in allowed_types:
+            return {"status": "ignored_non_run", "type": data.get("type"), "allowed": allowed_types}
         distance_m = data.get("distance", 0) or 0
         distance_km = float(distance_m) / 1000.0
         start = data.get("start_date_local") or data.get("start_date")
