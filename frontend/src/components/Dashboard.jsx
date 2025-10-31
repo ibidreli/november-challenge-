@@ -156,22 +156,6 @@ export default function Dashboard({ refreshKey = 0 }) {
         </div>
       </div>
 
-      {/* Gesamt-KM Anzeige (wie ein Button) - SEPARATE ZEILE */}
-      <div style={{ marginTop: 14, marginBottom: 14, width: "100%" }}>
-        <button
-          className="btn primary"
-          style={{
-            cursor: "default",
-            pointerEvents: "none",
-            width: "100%",
-            fontSize: "15px",
-            padding: "14px 16px"
-          }}
-        >
-          🏃 Zusammen haben wir {totalKmAll} km gesammelt
-        </button>
-      </div>
-
       <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "flex-start" }}>
         <div className="tabs" role="tablist" aria-label="View selector">
           <button
@@ -188,6 +172,24 @@ export default function Dashboard({ refreshKey = 0 }) {
           </button>
         </div>
       </div>
+
+      {/* Gesamt-KM Anzeige nur auf Ranglisten-Tab */}
+      {view === "public" && (
+        <div style={{ marginTop: 14, marginBottom: 14, width: "100%" }}>
+          <button
+            className="btn primary"
+            style={{
+              cursor: "default",
+              pointerEvents: "none",
+              width: "100%",
+              fontSize: "15px",
+              padding: "14px 16px"
+            }}
+          >
+          Zusammen haben wir {totalKmAll} km gesammelt!
+          </button>
+        </div>
+      )}
 
       <div style={{ marginTop: 18 }}>
         {view === "personal" && (
