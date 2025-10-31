@@ -137,6 +137,9 @@ export default function Dashboard({ refreshKey = 0 }) {
     );
   };
 
+  // Calculate total km from all players
+  const totalKmAll = leaderboard.reduce((sum, p) => sum + kmFromSlots(p.slots), 0);
+
   return (
     <div className="simple-dashboard" style={{ padding: 16 }}>
       <div
@@ -152,7 +155,7 @@ export default function Dashboard({ refreshKey = 0 }) {
           <h1 style={{ margin: 0 }}>November Challenge</h1>
         </div>
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
           <div className="tabs" role="tablist" aria-label="View selector">
             <button
               className={`tab ${view === "personal" ? "active" : ""}`}
@@ -166,6 +169,19 @@ export default function Dashboard({ refreshKey = 0 }) {
             >
               Rangliste
             </button>
+          </div>
+          
+          <div style={{
+            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            color: "white",
+            padding: "8px 14px",
+            borderRadius: "8px",
+            fontWeight: "700",
+            fontSize: "14px",
+            whiteSpace: "nowrap",
+            boxShadow: "0 2px 8px rgba(102, 126, 234, 0.3)"
+          }}>
+            ✓ Zusammen: {totalKmAll} km
           </div>
         </div>
       </div>
