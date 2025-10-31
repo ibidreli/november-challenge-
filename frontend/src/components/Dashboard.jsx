@@ -156,20 +156,23 @@ export default function Dashboard({ refreshKey = 0 }) {
         </div>
       </div>
 
-      {/* Gesamt-KM Anzeige */}
-      <div style={{
-        background: "linear-gradient(135deg, #00b3a6 0%, #00897b 100%)",
-        color: "white",
-        padding: "12px 16px",
-        borderRadius: "8px",
-        fontWeight: "700",
-        fontSize: "15px",
-        marginTop: "14px",
-        marginBottom: "14px",
-        boxShadow: "0 2px 8px rgba(0, 179, 166, 0.2)",
-        textAlign: "center"
-      }}>
-        🏃 Zusammen haben wir {totalKmAll} km gesammelt
+      {/* Gesamt-KM Anzeige (wie ein Button) */}
+      <div style={{ marginTop: 14, marginBottom: 14, textAlign: "center" }}>
+        <button
+          className="btn primary"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+            fontSize: "16px",
+            padding: "12px 24px",
+            cursor: "default",
+            pointerEvents: "none"
+          }}
+        >
+          🏃 Zusammen haben wir {totalKmAll} km gesammelt
+        </button>
       </div>
 
       <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "flex-start" }}>
