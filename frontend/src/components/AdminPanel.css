@@ -1,0 +1,551 @@
+/* Admin Panel Styles */
+
+.admin-login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.admin-login-box {
+  background: white;
+  padding: 40px;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  max-width: 400px;
+}
+
+.admin-login-box h1 {
+  text-align: center;
+  color: #333;
+  margin-bottom: 30px;
+  font-size: 28px;
+}
+
+.admin-login-box form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.admin-login-box input {
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+  transition: border-color 0.3s;
+}
+
+.admin-login-box input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.admin-login-box button {
+  padding: 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.admin-login-box button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.admin-login-box button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error-message {
+  color: #dc3545;
+  background: #f8d7da;
+  padding: 12px;
+  border-radius: 4px;
+  margin-top: 15px;
+  border: 1px solid #f5c6cb;
+}
+
+/* Main Admin Container */
+
+.admin-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  background: #f8f9fa;
+  min-height: 100vh;
+}
+
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.admin-header h1 {
+  margin: 0;
+  color: #333;
+  font-size: 28px;
+}
+
+.logout-btn {
+  padding: 10px 20px;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background 0.3s;
+}
+
+.logout-btn:hover {
+  background: #c82333;
+}
+
+.admin-error {
+  background: #f8d7da;
+  color: #721c24;
+  padding: 15px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  border: 1px solid #f5c6cb;
+}
+
+.admin-success {
+  background: #d4edda;
+  color: #155724;
+  padding: 15px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  border: 1px solid #c3e6cb;
+}
+
+/* Tabs */
+
+.admin-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  background: white;
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.tab-btn {
+  padding: 10px 20px;
+  background: #e9ecef;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.3s;
+  color: #666;
+}
+
+.tab-btn.active {
+  background: #667eea;
+  color: white;
+}
+
+.tab-btn:hover {
+  background: #667eea;
+  color: white;
+}
+
+/* Admin Section */
+
+.admin-section {
+  background: white;
+  padding: 30px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.admin-section h2 {
+  color: #333;
+  margin-top: 0;
+  margin-bottom: 25px;
+  font-size: 22px;
+  border-bottom: 2px solid #667eea;
+  padding-bottom: 10px;
+}
+
+.admin-section h3 {
+  color: #555;
+  font-size: 18px;
+  margin-bottom: 15px;
+}
+
+.admin-section h4 {
+  color: #666;
+  font-size: 16px;
+  margin-bottom: 12px;
+}
+
+/* Add User Form */
+
+.add-user-form {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 30px;
+  border-left: 4px solid #667eea;
+}
+
+.add-user-form form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.add-user-form input {
+  flex: 1;
+  min-width: 200px;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.add-user-form button {
+  padding: 10px 20px;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background 0.3s;
+}
+
+.add-user-form button:hover:not(:disabled) {
+  background: #218838;
+}
+
+.add-user-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Users List */
+
+.users-list {
+  margin-bottom: 30px;
+}
+
+.users-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.user-card {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid #dee2e6;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.user-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.user-card h4 {
+  margin: 0 0 10px 0;
+  color: #333;
+}
+
+.user-card p {
+  margin: 5px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.user-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 15px;
+  flex-wrap: wrap;
+}
+
+.user-actions button {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: bold;
+  transition: all 0.3s;
+  min-width: 80px;
+}
+
+.edit-btn {
+  background: #667eea;
+  color: white;
+}
+
+.edit-btn:hover {
+  background: #5568d3;
+}
+
+.reset-btn {
+  background: #ffc107;
+  color: #333;
+}
+
+.reset-btn:hover {
+  background: #e0a800;
+}
+
+.delete-btn {
+  background: #dc3545;
+  color: white;
+}
+
+.delete-btn:hover {
+  background: #c82333;
+}
+
+/* Add Activity Form */
+
+.add-activity-form {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 25px;
+  border-left: 4px solid #667eea;
+}
+
+.add-activity-form form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.add-activity-form input {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.add-activity-form input[type="date"] {
+  min-width: 150px;
+}
+
+.add-activity-form input[type="number"] {
+  min-width: 150px;
+}
+
+.add-activity-form button {
+  padding: 10px 20px;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background 0.3s;
+}
+
+.add-activity-form button:hover:not(:disabled) {
+  background: #218838;
+}
+
+.add-activity-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Selected User Info */
+
+.selected-user-info {
+  background: #e7f3ff;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-left: 4px solid #667eea;
+}
+
+.selected-user-info h3 {
+  margin: 0;
+}
+
+.change-user-btn {
+  padding: 8px 15px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.change-user-btn:hover {
+  background: #5568d3;
+}
+
+/* Activities List */
+
+.activities-list {
+  margin-top: 20px;
+}
+
+.activities-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.activities-table thead {
+  background: #667eea;
+  color: white;
+  font-weight: bold;
+}
+
+.activities-table th,
+.activities-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.activities-table tr:hover {
+  background: #f8f9fa;
+}
+
+.activities-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.delete-activity-btn {
+  padding: 6px 12px;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: bold;
+  transition: background 0.3s;
+}
+
+.delete-activity-btn:hover {
+  background: #c82333;
+}
+
+/* Select User Prompt */
+
+.select-user-prompt {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.select-user-prompt p {
+  color: #666;
+  font-size: 16px;
+  margin-bottom: 20px;
+}
+
+.users-list-for-activities {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.user-select-btn {
+  padding: 15px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+
+.user-select-btn:hover {
+  background: #5568d3;
+  transform: translateY(-3px);
+  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+/* Responsive */
+
+@media (max-width: 768px) {
+  .admin-header {
+    flex-direction: column;
+    gap: 15px;
+    text-align: center;
+  }
+
+  .admin-header h1 {
+    font-size: 22px;
+  }
+
+  .admin-tabs {
+    flex-direction: column;
+  }
+
+  .tab-btn {
+    width: 100%;
+  }
+
+  .add-user-form form,
+  .add-activity-form form {
+    flex-direction: column;
+  }
+
+  .add-user-form input,
+  .add-activity-form input {
+    width: 100%;
+  }
+
+  .users-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .activities-table {
+    font-size: 14px;
+  }
+
+  .activities-table th,
+  .activities-table td {
+    padding: 8px;
+  }
+
+  .selected-user-info {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+
+  .selected-user-info h3 {
+    margin: 0;
+  }
+}

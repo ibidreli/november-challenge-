@@ -156,8 +156,20 @@ def sync_recent_activities_from_strava(user: User, db: Session):
 						start = start[:-1]
 					dt = datetime.datetime.fromisoformat(start)
 					act_date = dt.date()
+					
+					# NEW: Check if there's already a manual activity for this user/date
+					# If so, skip this Strava import (manual entries have priority)
+					manual_exists = db.query(ActivityModel).filter(
+						ActivityModel.user_id == user.id,
+						ActivityModel.date == act_date,
+						ActivityModel.is_manual == True
+					).first()
+					if manual_exists:
+						logging.info("Skipping Strava activity for user %s on %s (manual entry exists)", user.id, act_date)
+						continue
+					
 					# insert Activity
-					activity_obj = ActivityModel(user_id=user.id, strava_id=strava_aid, date=act_date, distance_km=distance_km, status="fetched")
+					activity_obj = ActivityModel(user_id=user.id, strava_id=strava_aid, date=act_date, distance_km=distance_km, status="fetched", is_manual=False)
 					db.add(activity_obj)
 					db.commit()
 					db.refresh(activity_obj)

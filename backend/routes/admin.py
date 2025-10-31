@@ -1,197 +1,369 @@
-from fastapi import APIRouter, Request, Depends, HTTPException
-from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
-from typing import Optional
-import os, time, uuid, logging
+"""
+Admin routes for managing users and activities.
+Requires admin authentication via password/token.
+"""
 
-from database import get_db
+from fastapi import APIRouter, Depends, HTTPException, Header, Query
+from sqlalchemy.orm import Session
 from models.user import User
 from models.activity import Activity
 from models.claim import Claim
-from sqlalchemy.orm.attributes import flag_modified
+from database import get_db
+from typing import Optional
+import os
+import datetime
+import secrets
+import hashlib
 
 router = APIRouter()
 
-# simple in-memory admin session store: token -> expires_epoch
-ADMIN_SESSIONS: dict = {}
-# token TTL seconds
-ADMIN_TTL = int(os.getenv("ADMIN_TOKEN_TTL", "3600"))
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+# Admin config from environment
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
+ADMIN_TOKENS = {}  # Store valid tokens with expiry
 
-def _require_admin(request: Request):
-    if not ADMIN_PASSWORD:
-        raise HTTPException(status_code=403, detail="Admin interface disabled (no ADMIN_PASSWORD set).")
-    token = request.headers.get("x-admin-token") or ""
-    if not token and request.headers.get("authorization", ""):
-        auth = request.headers.get("authorization", "")
-        if auth.lower().startswith("bearer "):
-            token = auth[7:].strip()
+
+def hash_password(password: str) -> str:
+    """Hash password for storage/comparison"""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def generate_token() -> str:
+    """Generate a secure random token"""
+    return secrets.token_urlsafe(32)
+
+
+def verify_admin_token(token: Optional[str] = Header(None, alias="X-Admin-Token")) -> str:
+    """Dependency to verify admin token"""
     if not token:
-        raise HTTPException(status_code=401, detail="Missing admin token")
-    entry = ADMIN_SESSIONS.get(token)
-    if not entry or entry < time.time():
-        # remove expired if present
-        if token in ADMIN_SESSIONS:
-            ADMIN_SESSIONS.pop(token, None)
+        raise HTTPException(status_code=401, detail="Admin token required")
+    
+    # Check if token is valid and not expired
+    if token not in ADMIN_TOKENS:
         raise HTTPException(status_code=401, detail="Invalid or expired admin token")
+    
+    token_data = ADMIN_TOKENS[token]
+    if datetime.datetime.now() > token_data["expires_at"]:
+        del ADMIN_TOKENS[token]
+        raise HTTPException(status_code=401, detail="Token expired")
+    
+    # Refresh expiry time on each request
+    token_data["expires_at"] = datetime.datetime.now() + datetime.timedelta(hours=2)
     return token
 
-@router.post("/login")
-def admin_login(payload: dict):
-    """
-    Body: {"password": "<pw>"}
-    Returns: {"token": "...", "expires": epoch}
-    """
-    if not ADMIN_PASSWORD:
-        raise HTTPException(status_code=403, detail="Admin interface disabled")
-    pw = payload.get("password") if isinstance(payload, dict) else None
-    if not pw or pw != ADMIN_PASSWORD:
-        raise HTTPException(status_code=401, detail="Invalid password")
-    token = uuid.uuid4().hex
-    expires = time.time() + ADMIN_TTL
-    ADMIN_SESSIONS[token] = expires
-    return {"token": token, "expires": expires}
 
-# Players
-@router.get("/players")
-def list_players(db: Session = Depends(get_db), _=Depends(_require_admin)):
+@router.post("/login")
+def admin_login(password: str, db: Session = Depends(get_db)):
+    """
+    Admin login with password.
+    Returns: {"token": "...", "expires_in": 7200}
+    """
+    if hash_password(password) != hash_password(ADMIN_PASSWORD):
+        raise HTTPException(status_code=401, detail="Invalid password")
+    
+    # Generate new token
+    token = generate_token()
+    ADMIN_TOKENS[token] = {
+        "expires_at": datetime.datetime.now() + datetime.timedelta(hours=2)
+    }
+    
+    return {
+        "token": token,
+        "expires_in": 7200  # 2 hours in seconds
+    }
+
+
+@router.post("/logout")
+def admin_logout(token: str = Depends(verify_admin_token)):
+    """Logout: invalidate token"""
+    if token in ADMIN_TOKENS:
+        del ADMIN_TOKENS[token]
+    return {"status": "logged_out"}
+
+
+# ============ USER MANAGEMENT ============
+
+@router.get("/users")
+def get_all_users_admin(db: Session = Depends(get_db), token: str = Depends(verify_admin_token)):
+    """Get all users for admin management"""
     users = db.query(User).all()
-    out = []
+    result = []
     for u in users:
         try:
             u.ensure_slots()
         except Exception:
             pass
-        out.append({"id": u.id, "name": u.name, "strava_id": u.strava_id, "total_score": int(u.total_score or 0), "slots": u.slots})
-    return out
+        result.append({
+            "id": u.id,
+            "name": u.name,
+            "strava_id": u.strava_id,
+            "total_score": int(u.total_score or 0),
+            "slots": u.slots
+        })
+    return result
 
-@router.post("/player")
-def create_player(payload: dict, db: Session = Depends(get_db), _=Depends(_require_admin)):
-    name = payload.get("name")
-    strava_id = payload.get("strava_id")
-    if not name:
-        raise HTTPException(status_code=400, detail="name required")
-    # avoid duplicate strava_id
-    if strava_id:
-        exists = db.query(User).filter_by(strava_id=strava_id).first()
-        if exists:
-            raise HTTPException(status_code=400, detail="user with strava_id exists")
-    user = User(name=name, strava_id=(int(strava_id) if strava_id else None))
-    try:
-        user.ensure_slots()
-    except Exception:
-        pass
+
+@router.post("/users")
+def create_user_admin(name: str, db: Session = Depends(get_db), token: str = Depends(verify_admin_token)):
+    """Create a new user"""
+    if not name or not name.strip():
+        raise HTTPException(status_code=400, detail="Name is required")
+    
+    # Check if user already exists
+    existing = db.query(User).filter(User.name == name.strip()).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="User with this name already exists")
+    
+    user = User(name=name.strip(), slots=[None] * 30)
     db.add(user)
     db.commit()
     db.refresh(user)
-    return {"id": user.id, "name": user.name, "strava_id": user.strava_id}
+    
+    return {
+        "id": user.id,
+        "name": user.name,
+        "total_score": 0,
+        "slots": user.slots
+    }
 
-@router.delete("/player/{user_id}")
-def delete_player(user_id: int, db: Session = Depends(get_db), _=Depends(_require_admin)):
+
+@router.put("/users/{user_id}")
+def update_user_admin(
+    user_id: int,
+    name: Optional[str] = None,
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_admin_token)
+):
+    """Update user information"""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="user not found")
-    # delete related claims and activities first
-    try:
-        db.query(Claim).filter(Claim.user_id == user.id).delete(synchronize_session=False)
-        db.query(Activity).filter(Activity.user_id == user.id).delete(synchronize_session=False)
-        db.delete(user)
-        db.commit()
-        return {"ok": True}
-    except Exception as e:
-        db.rollback()
-        logging.exception("delete_player failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if name and name.strip():
+        user.name = name.strip()
+    
+    db.commit()
+    db.refresh(user)
+    
+    return {
+        "id": user.id,
+        "name": user.name,
+        "total_score": int(user.total_score or 0),
+        "slots": user.slots
+    }
 
-# Activities (admin-created manual activities are stored with status 'manual')
-@router.post("/activity")
-def add_activity(payload: dict, db: Session = Depends(get_db), _=Depends(_require_admin)):
-    """
-    payload: { "user_id": int OR "strava_id": int, "date": "YYYY-MM-DD", "km": number }
-    """
-    user = None
-    if "user_id" in payload:
-        user = db.query(User).filter(User.id == int(payload["user_id"])).first()
-    elif "strava_id" in payload:
-        user = db.query(User).filter(User.strava_id == int(payload["strava_id"])).first()
+
+@router.delete("/users/{user_id}")
+def delete_user_admin(user_id: int, db: Session = Depends(get_db), token: str = Depends(verify_admin_token)):
+    """Delete a user and all associated activities/claims"""
+    user = db.query(User).filter(User.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="user not found")
-    date_s = payload.get("date")
-    km = payload.get("km")
-    if not date_s or km is None:
-        raise HTTPException(status_code=400, detail="date and km required")
-    try:
-        dt = __import__("datetime").datetime.fromisoformat(date_s).date()
-    except Exception:
-        raise HTTPException(status_code=400, detail="invalid date format, use YYYY-MM-DD")
-    try:
-        activity = Activity(user_id=user.id, strava_id=f"manual-{uuid.uuid4().hex}", date=dt, distance_km=float(km), status="manual")
-        db.add(activity)
-        db.commit()
-        db.refresh(activity)
-        # assign to user's slots using existing helper
-        assigned = user.assign_activity(int(float(km)), activity.id)
-        if assigned:
-            claim = Claim(user_id=user.id, km=assigned, date=dt, activity_id=activity.id)
-            try:
-                flag_modified(user, "slots")
-            except Exception:
-                pass
-            db.add(claim)
-            db.add(user)
-            activity.effective_km = assigned
-            activity.status = "claimed"
-            db.add(activity)
-            db.commit()
-            return {"ok": True, "activity_id": activity.id, "assigned_km": assigned}
-        else:
-            db.commit()
-            return {"ok": True, "activity_id": activity.id, "assigned_km": None}
-    except Exception as e:
-        db.rollback()
-        logging.exception("add_activity failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Delete associated claims and activities
+    db.query(Claim).filter(Claim.user_id == user_id).delete()
+    db.query(Activity).filter(Activity.user_id == user_id).delete()
+    db.delete(user)
+    db.commit()
+    
+    return {"status": "deleted"}
 
-@router.delete("/activity/{activity_id}")
-def delete_activity(activity_id: int, db: Session = Depends(get_db), _=Depends(_require_admin)):
-    activity = db.query(Activity).filter(Activity.id == activity_id).first()
-    if not activity:
-        raise HTTPException(status_code=404, detail="activity not found")
+
+# ============ ACTIVITY MANAGEMENT ============
+
+@router.get("/users/{user_id}/activities")
+def get_user_activities_admin(
+    user_id: int,
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_admin_token)
+):
+    """Get all activities for a user (both manual and Strava)"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    activities = db.query(Activity).filter(Activity.user_id == user_id).all()
+    result = []
+    for act in activities:
+        result.append({
+            "id": act.id,
+            "date": act.date.isoformat() if act.date else None,
+            "distance_km": float(act.distance_km or 0),
+            "effective_km": act.effective_km,
+            "status": act.status,
+            "is_manual": bool(act.is_manual),
+            "strava_id": act.strava_id
+        })
+    
+    return sorted(result, key=lambda x: x["date"] or "", reverse=True)
+
+
+@router.post("/users/{user_id}/activities")
+def create_activity_admin(
+    user_id: int,
+    date: str,  # ISO format: "2024-11-15"
+    distance_km: float,
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_admin_token)
+):
+    """
+    Create a manual activity for a user.
+    Manual activities have priority and won't be overwritten by Strava sync.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if distance_km < 0:
+        raise HTTPException(status_code=400, detail="Distance must be positive")
+    
     try:
-        user = db.query(User).filter(User.id == activity.user_id).first() if activity.user_id else None
-        # remove claim row(s)
-        db.query(Claim).filter(Claim.activity_id == activity.id).delete(synchronize_session=False)
-        # if the activity had been assigned to a slot, clear it and adjust total_score
-        if user:
-            try:
-                user.ensure_slots()
-                modified = False
-                slots = list(user.slots or [])
-                for i, s in enumerate(slots):
-                    if isinstance(s, dict) and s.get("activity_id") == activity.id:
-                        km = int(s.get("km") or 0)
-                        slots[i] = None
-                        user.slots = slots
-                        try:
-                            user.total_score = max(0, int(user.total_score or 0) - km)
-                        except Exception:
-                            pass
-                        try:
-                            flag_modified(user, "slots")
-                        except Exception:
-                            pass
-                        modified = True
-                        break
-                if modified:
-                    db.add(user)
-            except Exception:
-                db.rollback()
-                logging.exception("failed to remove slot reference")
-        # finally delete activity
-        db.delete(activity)
-        db.commit()
-        return {"ok": True}
-    except Exception as e:
-        db.rollback()
-        logging.exception("delete_activity failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        activity_date = datetime.datetime.fromisoformat(date).date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format, use ISO format (YYYY-MM-DD)")
+    
+    # Check if activity already exists for this user/date (manual)
+    existing = db.query(Activity).filter(
+        Activity.user_id == user_id,
+        Activity.date == activity_date,
+        Activity.is_manual == True
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Manual activity already exists for this date")
+    
+    # Create new manual activity
+    activity = Activity(
+        user_id=user_id,
+        date=activity_date,
+        distance_km=distance_km,
+        status="pending",
+        is_manual=True,
+        strava_id=None  # Manual activities don't have strava_id
+    )
+    db.add(activity)
+    db.commit()
+    db.refresh(activity)
+    
+    return {
+        "id": activity.id,
+        "date": activity.date.isoformat(),
+        "distance_km": float(activity.distance_km),
+        "status": activity.status,
+        "is_manual": True
+    }
+
+
+@router.put("/users/{user_id}/activities/{activity_id}")
+def update_activity_admin(
+    user_id: int,
+    activity_id: int,
+    distance_km: Optional[float] = None,
+    date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_admin_token)
+):
+    """Update a manual activity"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    activity = db.query(Activity).filter(
+        Activity.id == activity_id,
+        Activity.user_id == user_id
+    ).first()
+    if not activity:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    
+    if not activity.is_manual:
+        raise HTTPException(status_code=400, detail="Cannot edit Strava activities")
+    
+    if distance_km is not None:
+        if distance_km < 0:
+            raise HTTPException(status_code=400, detail="Distance must be positive")
+        activity.distance_km = distance_km
+    
+    if date is not None:
+        try:
+            activity.date = datetime.datetime.fromisoformat(date).date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format")
+    
+    db.commit()
+    db.refresh(activity)
+    
+    return {
+        "id": activity.id,
+        "date": activity.date.isoformat(),
+        "distance_km": float(activity.distance_km),
+        "status": activity.status,
+        "is_manual": True
+    }
+
+
+@router.delete("/users/{user_id}/activities/{activity_id}")
+def delete_activity_admin(
+    user_id: int,
+    activity_id: int,
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_admin_token)
+):
+    """Delete an activity and associated claim"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    activity = db.query(Activity).filter(
+        Activity.id == activity_id,
+        Activity.user_id == user_id
+    ).first()
+    if not activity:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    
+    # Delete associated claim if exists
+    claim = db.query(Claim).filter(Claim.activity_id == activity_id).first()
+    if claim:
+        # Undo score changes
+        if user.total_score and claim.km:
+            user.total_score = max(0, (user.total_score or 0) - claim.km)
+        
+        # Remove from slots
+        if user.slots and isinstance(user.slots, list):
+            for i, slot in enumerate(user.slots):
+                if slot and isinstance(slot, dict) and slot.get("activity_id") == activity_id:
+                    user.slots[i] = None
+                    break
+        
+        db.delete(claim)
+    
+    db.delete(activity)
+    db.commit()
+    
+    return {"status": "deleted"}
+
+
+@router.post("/users/{user_id}/reset-slots")
+def reset_user_slots(
+    user_id: int,
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_admin_token)
+):
+    """Reset all slots and score for a user"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Reset slots and score
+    user.slots = [None] * 30
+    user.total_score = 0
+    
+    # Delete all claims
+    db.query(Claim).filter(Claim.user_id == user_id).delete()
+    
+    # Reset all activities to pending
+    activities = db.query(Activity).filter(Activity.user_id == user_id).all()
+    for act in activities:
+        act.status = "pending"
+        act.effective_km = None
+    
+    db.commit()
+    
+    return {"status": "reset"}

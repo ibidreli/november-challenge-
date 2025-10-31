@@ -28,6 +28,11 @@ export default defineConfig({
         changeOrigin: true,
         secure: false
       },
+      "/admin": {
+        target: process.env.VITE_API_BASE_URL ? process.env.VITE_API_BASE_URL : "https://november-challenge.onrender.com",
+        changeOrigin: true,
+        secure: false
+      },
     },
   },
 });

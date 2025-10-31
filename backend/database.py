@@ -326,6 +326,55 @@ def ensure_slots_column(engine):
     except Exception:
         logging.exception("Failed to ensure 'slots' column exists. Manual migration may be required.")
 
+# new helper: ensure 'is_manual' column exists in activities table
+def ensure_is_manual_column(engine):
+    """
+    Ensure 'is_manual' column exists on activities table.
+    - Postgres: add BOOLEAN column, initialize to False, set default to False.
+    - SQLite: ALTER TABLE ADD COLUMN and initialize rows to 0.
+    No-op for other DBs.
+    """
+    try:
+        p = urlparse(DATABASE_URL or "")
+        with engine.begin() as conn:
+            # Postgres path
+            if p.scheme and p.scheme.startswith("postgres"):
+                res = conn.execute(text("""
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'activities' AND column_name = 'is_manual'
+                    LIMIT 1
+                """))
+                if res.first():
+                    return
+                logging.info("Adding 'is_manual' column to activities table (automatic startup migration).")
+                conn.execute(text("ALTER TABLE activities ADD COLUMN is_manual BOOLEAN DEFAULT FALSE"))
+                conn.execute(text("UPDATE activities SET is_manual = FALSE WHERE is_manual IS NULL"))
+                logging.info("'is_manual' column added and initialized (Postgres).")
+                return
+
+            # SQLite path
+            if p.scheme and p.scheme.startswith("sqlite"):
+                # check activities table exists
+                t = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='activities'")).fetchone()
+                if not t:
+                    return
+                # check existing columns
+                cols = [row[1] for row in conn.execute(text("PRAGMA table_info('activities')")).fetchall()]
+                if "is_manual" in cols:
+                    return
+                logging.info("Adding 'is_manual' column to activities table (SQLite automatic startup migration).")
+                # add column as INTEGER (0 = False, 1 = True)
+                conn.execute(text("ALTER TABLE activities ADD COLUMN is_manual INTEGER DEFAULT 0"))
+                conn.execute(text("UPDATE activities SET is_manual = 0 WHERE is_manual IS NULL"))
+                logging.info("'is_manual' column added and initialized (SQLite).")
+                return
+
+            # other DBs: no-op
+            return
+    except Exception:
+        logging.exception("Failed to ensure 'is_manual' column exists. Manual migration may be required.")
+
+
 # new helper: ensure 'strava_id' column is integer type in Postgres
 def ensure_strava_id_column_type(engine):
     """

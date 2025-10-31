@@ -1,31 +1,39 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import Dashboard from "./components/Dashboard";
+import AdminPanel from "./components/AdminPanel";
 import logo from "../logo/Logo.png"; // import logo from frontend/logo/Logo.png
-import Admin from "./components/Admin";
 
 export default function App() {
-  // simple client-side routing: if path is /admin render Admin
-  if (typeof window !== "undefined" && window.location.pathname === "/admin") {
-    return <Admin />;
-  }
   const [refreshKey, setRefreshKey] = useState(0);
   const [syncing, setSyncing] = useState(false);
+  const [currentPage, setCurrentPage] = useState("dashboard"); // "dashboard" | "admin"
+
+  // Check URL for admin page on mount
+  useEffect(() => {
+    const path = window.location.pathname;
+    if (path.includes("/admin")) {
+      setCurrentPage("admin");
+    }
+  }, []);
 
   // Beim App-Start/Reload: alle Nutzer/Activities synchronisieren (Server holt neu von Strava)
   useEffect(() => {
     let cancelled = false;
 
     async function initialSync() {
-      try {
-        setSyncing(true);
-        await axios.post("/users/sync_all", null, { withCredentials: false });
-      } catch (e) {
-        console.warn("Initial sync_all failed:", e);
-      } finally {
-        if (!cancelled) {
-          setSyncing(false);
-          setRefreshKey((k) => k + 1); // Dashboard nach Sync neu laden
+      // Only sync if on dashboard page
+      if (currentPage !== "admin") {
+        try {
+          setSyncing(true);
+          await axios.post("/users/sync_all", null, { withCredentials: false });
+        } catch (e) {
+          console.warn("Initial sync_all failed:", e);
+        } finally {
+          if (!cancelled) {
+            setSyncing(false);
+            setRefreshKey((k) => k + 1); // Dashboard nach Sync neu laden
+          }
         }
       }
     }
@@ -34,7 +42,12 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [currentPage]);
+
+  // Admin page - skip dashboard rendering
+  if (currentPage === "admin") {
+    return <AdminPanel />;
+  }
 
   return (
     <div>

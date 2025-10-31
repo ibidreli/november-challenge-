@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session
 import os
 import logging
 import traceback
-from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from urllib.parse import urlparse
+from routes import routes  # was du bereits hast
 
 
 
@@ -19,16 +20,18 @@ DB_IMPORT_ERROR = None
 DB_AVAILABLE = False
 try:
 	# try normal imports (may raise)
-	from database import SessionLocal, engine, Base, get_db, ensure_slots_column, ensure_strava_id_column_type, DATABASE_URL, try_create_missing_database
+	from database import SessionLocal, engine, Base, get_db, ensure_slots_column, ensure_strava_id_column_type, ensure_is_manual_column, DATABASE_URL, try_create_missing_database
 	from models import user, activity, claim
 	from auth.routes import router as auth_router
 	from routes.activities import router as activities_router
 	from routes.users import router as users_router
 	from routes.strava_webhook import router as strava_webhook_router
+	from routes.admin import router as admin_router
 	# perform DB migrations / init that may raise
 	Base.metadata.create_all(bind=engine)
 	ensure_slots_column(engine)
 	ensure_strava_id_column_type(engine)
+	ensure_is_manual_column(engine)
 	DB_AVAILABLE = True
 except Exception as e:
 	DB_IMPORT_ERROR = traceback.format_exc()
@@ -51,14 +54,28 @@ app = FastAPI(title="November Challenge API")
 
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "").strip()
+CUSTOM_DOMAIN = os.getenv("CUSTOM_DOMAIN", "").strip()
 # Always allow the known deployed frontend origin as a safe default in addition to any explicit env value.
 # This avoids CORS/credential issues when FRONTEND_URL isn't set in the service env.
 DEFAULT_FRONTEND = "https://november-challenge-1.onrender.com"
+
+# Build list of allowed origins
+allow_origins = []
+
+# Add custom domain if provided (priority)
+if CUSTOM_DOMAIN:
+    allow_origins.append(CUSTOM_DOMAIN)
+
+# Add FRONTEND_URL if explicitly set
 if FRONTEND_URL:
-    allow_origins = [FRONTEND_URL]
-else:
-    # prefer the deployed frontend domain rather than wildcard to keep credentials working
-    allow_origins = [DEFAULT_FRONTEND]
+    allow_origins.append(FRONTEND_URL)
+
+# Always add default Render frontend as fallback
+if DEFAULT_FRONTEND not in allow_origins:
+    allow_origins.append(DEFAULT_FRONTEND)
+
+# Log allowed origins for debugging
+logging.info(f"CORS allowed origins: {allow_origins}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -76,13 +93,9 @@ if DB_AVAILABLE:
 	app.include_router(strava_webhook_router, prefix="/auth", tags=["auth"])  # <- webhook handler
 	app.include_router(users_router, prefix="/users", tags=["users"])
 	app.include_router(activities_router, prefix="/activities", tags=["activities"])
-	# admin router (requires ADMIN_PASSWORD env to be set)
-	try:
-		from routes.admin import router as admin_router
-		app.include_router(admin_router, prefix="/admin", tags=["admin"])
-	except Exception:
-		# non-fatal if import fails — admin endpoints will not be available
-		logging.exception("Failed to register admin router")
+	app.include_router(admin_router, prefix="/admin", tags=["admin"])  # NEW: Admin management
+
+
 else:
 	# fallback: minimal info for debugging when DB/imports failed
 	@app.get("/debug/nodb")
@@ -91,20 +104,6 @@ else:
 		return {"db_import_error": DB_IMPORT_ERROR or "(no traceback captured)"}
 
 	# --- NEW: friendly fallback endpoints so frontend calls don't get 404 ---
-
-	# Fallback: redirect /admin (and subpaths) to the frontend admin UI so direct links work.
-	@app.get("/admin")
-	def fallback_admin_root():
-		frontend_url = os.getenv("FRONTEND_URL", "").strip() or "/"
-		target = frontend_url.rstrip("/") + "/admin"
-		# Use a 302 redirect to the frontend admin UI (keeps browser on HTTPS frontend)
-		return RedirectResponse(url=target)
-	
-	@app.get("/admin/{path:path}")
-	def fallback_admin_catchall(path: str):
-		frontend_url = os.getenv("FRONTEND_URL", "").strip() or "/"
-		target = frontend_url.rstrip("/") + "/admin"
-		return RedirectResponse(url=target)
 
 	@app.get("/users/me")
 	def fallback_users_me():
