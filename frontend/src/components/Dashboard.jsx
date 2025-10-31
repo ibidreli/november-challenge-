@@ -149,14 +149,13 @@ export default function Dashboard({ refreshKey = 0 }) {
           alignItems: "center",
           gap: 16,
           flexWrap: "wrap",
+          paddingBottom: 12,
+          borderBottom: "1px solid #f0f0f0"
         }}
       >
         <div>
           <h1 style={{ margin: 0 }}>November Challenge</h1>
         </div>
-      </div>
-
-      <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "flex-start" }}>
         <div className="tabs" role="tablist" aria-label="View selector">
           <button
             className={`tab ${view === "personal" ? "active" : ""}`}
@@ -175,7 +174,7 @@ export default function Dashboard({ refreshKey = 0 }) {
 
       {/* Gesamt-KM Anzeige nur auf Ranglisten-Tab */}
       {view === "public" && (
-        <div style={{ marginTop: 14, marginBottom: 14, width: "100%" }}>
+        <div style={{ marginTop: 16, marginBottom: 16, width: "100%" }}>
           <button
             className="btn primary"
             style={{
@@ -186,7 +185,7 @@ export default function Dashboard({ refreshKey = 0 }) {
               padding: "14px 16px"
             }}
           >
-          Zusammen haben wir {totalKmAll} km gesammelt!
+            🏃 Zusammen haben wir {totalKmAll} km gesammelt
           </button>
         </div>
       )}
