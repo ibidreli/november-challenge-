@@ -182,13 +182,10 @@ export default function Dashboard({ refreshKey = 0 }) {
               pointerEvents: "none",
               width: "100%",
               fontSize: "15px",
-              padding: "14px 16px",
-              whiteSpace: "normal"
+              padding: "14px 16px"
             }}
           >
-            🏃 Zusammen haben wir{" "}
-            <span className="km-mobile">{totalKmAll} km gesammelt!</span>
-            <span className="km-desktop">{totalKmAll} km gesammelt!</span>
+            Zusammen haben wir: {totalKmAll} km
           </button>
         </div>
       )}

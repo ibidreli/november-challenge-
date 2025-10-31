@@ -199,10 +199,6 @@ button { cursor: pointer; border-radius: 6px; border: 1px solid rgba(0,0,0,0.06)
   .month-grid{ grid-template-columns: repeat(5, 1fr); }
   .personal-grid { grid-template-columns: repeat(6, 1fr); gap:6px; }
   .personal-cell { height:44px; }
-  
-  /* Desktop: inline (same line), hide mobile version */
-  .km-mobile { display: none !important; }
-  .km-desktop { display: inline !important; }
 }
 
 @media (max-width: 760px) {
@@ -232,8 +228,4 @@ button { cursor: pointer; border-radius: 6px; border: 1px solid rgba(0,0,0,0.06)
     gap: 3px;
   }
   .mini-cell { width:7px; height:7px; border-radius:1px; }
-  
-  /* Mobile: km text on new line, hide desktop version */
-  .km-mobile { display: block !important; }
-  .km-desktop { display: none !important; }
 }
