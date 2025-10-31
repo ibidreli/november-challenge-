@@ -154,35 +154,38 @@ export default function Dashboard({ refreshKey = 0 }) {
         <div>
           <h1 style={{ margin: 0 }}>November Challenge</h1>
         </div>
+      </div>
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
-          <div className="tabs" role="tablist" aria-label="View selector">
-            <button
-              className={`tab ${view === "personal" ? "active" : ""}`}
-              onClick={() => setView("personal")}
-            >
-              Übersicht
-            </button>
-            <button
-              className={`tab ${view === "public" ? "active" : ""}`}
-              onClick={() => setView("public")}
-            >
-              Rangliste
-            </button>
-          </div>
-          
-          <div style={{
-            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-            color: "white",
-            padding: "8px 14px",
-            borderRadius: "8px",
-            fontWeight: "700",
-            fontSize: "14px",
-            whiteSpace: "nowrap",
-            boxShadow: "0 2px 8px rgba(102, 126, 234, 0.3)"
-          }}>
-            ✓ Zusammen: {totalKmAll} km
-          </div>
+      {/* Gesamt-KM Anzeige */}
+      <div style={{
+        background: "linear-gradient(135deg, #00b3a6 0%, #00897b 100%)",
+        color: "white",
+        padding: "12px 16px",
+        borderRadius: "8px",
+        fontWeight: "700",
+        fontSize: "15px",
+        marginTop: "14px",
+        marginBottom: "14px",
+        boxShadow: "0 2px 8px rgba(0, 179, 166, 0.2)",
+        textAlign: "center"
+      }}>
+        🏃 Zusammen haben wir {totalKmAll} km gesammelt
+      </div>
+
+      <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "flex-start" }}>
+        <div className="tabs" role="tablist" aria-label="View selector">
+          <button
+            className={`tab ${view === "personal" ? "active" : ""}`}
+            onClick={() => setView("personal")}
+          >
+            Übersicht
+          </button>
+          <button
+            className={`tab ${view === "public" ? "active" : ""}`}
+            onClick={() => setView("public")}
+          >
+            Rangliste
+          </button>
         </div>
       </div>
 
