@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import Dashboard from "./components/Dashboard";
 import logo from "../logo/Logo.png"; // import logo from frontend/logo/Logo.png
-import AdminPage from "./pages/Admin";
+import AdminPage from "./pages/admin";
 
 export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
