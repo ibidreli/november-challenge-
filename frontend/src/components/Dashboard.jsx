@@ -185,7 +185,11 @@ export default function Dashboard({ refreshKey = 0 }) {
               padding: "14px 16px"
             }}
           >
-          Zusammen haben wir <br />{totalKmAll} km gesammelt!
+          Zusammen haben wir {" "}
+            <span style={{ display: "none" }} className="mobile-break">
+              <br />
+            </span>
+            {totalKmAll} km gesammelt!
           </button>
         </div>
       )}

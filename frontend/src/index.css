@@ -228,4 +228,7 @@ button { cursor: pointer; border-radius: 6px; border: 1px solid rgba(0,0,0,0.06)
     gap: 3px;
   }
   .mini-cell { width:7px; height:7px; border-radius:1px; }
+  
+  /* Show br on mobile only */
+  .mobile-break { display: inline !important; }
 }
