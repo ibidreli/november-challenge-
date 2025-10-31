@@ -212,7 +212,7 @@ export default function Dashboard({ refreshKey = 0 }) {
                       Tage: {daysFromSlots(user.slots)}
                     </div>
                     <div style={{ color: "#444" }}>
-                      Score: {kmFromSlots(user.slots)}
+                      Km: {kmFromSlots(user.slots)}
                     </div>
                   </div>
                 </div>
@@ -273,7 +273,7 @@ export default function Dashboard({ refreshKey = 0 }) {
                         <div style={{ fontWeight: 700 }}>{p.name}</div>
                         <div style={{ fontSize: 13, color: "#666" }}>
                           <div>Tage: {daysFromSlots(p.slots)}</div>
-                          <div>Score: {p.total_score}</div>
+                          <div>Km: {p.total_score}</div>
                         </div>
                       </div>
                     </div>
