@@ -7,12 +7,18 @@ import logo from "../logo/Logo.png"; // import logo from frontend/logo/Logo.png
 export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [syncing, setSyncing] = useState(false);
-  const [currentPage, setCurrentPage] = useState("dashboard"); // "dashboard" | "admin"
+  const [currentPage, setCurrentPage] = useState(() => {
+    // Check URL on initial render
+    const path = window.location.pathname;
+    console.log("Initial pathname:", path); // Debug
+    return path && path.includes("/admin") ? "admin" : "dashboard";
+  });
 
   // Check URL for admin page on mount
   useEffect(() => {
     const path = window.location.pathname;
-    if (path.includes("/admin")) {
+    console.log("Pathname in effect:", path); // Debug
+    if (path && path.includes("/admin")) {
       setCurrentPage("admin");
     }
   }, []);
