@@ -143,7 +143,7 @@ export default function Dashboard({ refreshKey = 0 }) {
               className={`tab ${view === "personal" ? "active" : ""}`}
               onClick={() => setView("personal")}
             >
-              Deine Leistungen
+              Übersicht
             </button>
             <button
               className={`tab ${view === "public" ? "active" : ""}`}
@@ -158,7 +158,7 @@ export default function Dashboard({ refreshKey = 0 }) {
       <div style={{ marginTop: 18 }}>
         {view === "personal" && (
           <div>
-            <h2 style={{ marginTop: 0 }}>Meine Übersicht</h2>
+            <h2 style={{ marginTop: 0 }}>Deine Übersicht</h2>
             {loading ? (
               <div style={{ color: "#666" }}>Lädt…</div>
             ) : !user ? (
@@ -166,7 +166,7 @@ export default function Dashboard({ refreshKey = 0 }) {
                 <div className="not-logged-text">
                   <p>
                     Du bist nicht angemeldet. Bitte mit Strava verbinden, um
-                    deinen persönlichen Fortschritt zu sehen.
+                    deine persönliche Übersicht zu sehen.
                   </p>
                 </div>
                 <div className="not-logged-action">
@@ -251,8 +251,9 @@ export default function Dashboard({ refreshKey = 0 }) {
                       <div>
                         <div style={{ fontWeight: 700 }}>{p.name}</div>
                         <div style={{ fontSize: 13, color: "#666" }}>
-                          Tage: {daysFromSlots(p.slots)} Score: {p.total_score}
-                        </div>
+                                <div>Tage: {daysFromSlots(p.slots)}</div>
+                                <div>Score: {p.total_score}</div>
+                                </div>
                       </div>
                     </div>
 
