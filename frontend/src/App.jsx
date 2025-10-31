@@ -8,17 +8,24 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [currentPage, setCurrentPage] = useState(() => {
-    // Check URL on initial render
+    // Check URL on initial render - try both pathname and hash
     const path = window.location.pathname;
-    console.log("Initial pathname:", path); // Debug
-    return path && path.includes("/admin") ? "admin" : "dashboard";
+    const hash = window.location.hash;
+    console.log("Initial pathname:", path, "hash:", hash); // Debug
+    
+    // Prüfe pathname ODER hash für /admin
+    const isAdmin = (path && path.includes("/admin")) || (hash && hash.includes("/admin"));
+    return isAdmin ? "admin" : "dashboard";
   });
 
   // Check URL for admin page on mount
   useEffect(() => {
     const path = window.location.pathname;
-    console.log("Pathname in effect:", path); // Debug
-    if (path && path.includes("/admin")) {
+    const hash = window.location.hash;
+    console.log("Pathname in effect:", path, "hash:", hash); // Debug
+    
+    const isAdmin = (path && path.includes("/admin")) || (hash && hash.includes("/admin"));
+    if (isAdmin) {
       setCurrentPage("admin");
     }
   }, []);
