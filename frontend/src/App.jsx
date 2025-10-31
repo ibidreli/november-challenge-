@@ -45,8 +45,8 @@ export default function App() {
 
       <main className="container" style={{ marginTop: 20 }}>
         {syncing && (
-          <div style={{ marginBottom: 8, color: "#666", fontSize: 14 }}>
-            Aktualisiere Aktivitäten
+          <div style={{ marginBottom: 0, color: "#666", fontSize: 0 }}>
+            
           </div>
         )}
         <Dashboard refreshKey={refreshKey} />
