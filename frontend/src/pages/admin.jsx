@@ -39,7 +39,7 @@ export default function AdminPage() {
     applySecret(secret);
     try {
       // test call
-      await axios.get("/admin/users");
+      await axios.get("/api/admin/users");
       setAuthOk(true);
       setMsg("Eingeloggt");
     } catch (err) {
@@ -59,7 +59,7 @@ export default function AdminPage() {
   async function loadUsers() {
     setLoading(true);
     try {
-      const r = await axios.get("/admin/users");
+      const r = await axios.get("/api/admin/users");
       setUsers(r.data || []);
     } catch (e) {
       setMsg("Fehler beim Laden der Nutzer");
@@ -70,7 +70,7 @@ export default function AdminPage() {
   async function loadActivities() {
     setLoading(true);
     try {
-      const r = await axios.get("/admin/activities");
+      const r = await axios.get("/api/admin/activities");
       setActivities(r.data.items || []);
     } catch (e) {
       setMsg("Fehler beim Laden der Aktivitäten");
@@ -81,7 +81,7 @@ export default function AdminPage() {
   async function createUser() {
     if (!newUserName || newUserName.trim().length === 0) return setMsg("Name erforderlich");
     try {
-      const r = await axios.post("/admin/users?name=" + encodeURIComponent(newUserName.trim()));
+      const r = await axios.post("/api/admin/users?name=" + encodeURIComponent(newUserName.trim()));
       setMsg("User erstellt: id " + (r.data.id || "?"));
       setNewUserName("");
       await loadUsers();
@@ -94,7 +94,7 @@ export default function AdminPage() {
     const { user_id, distance_km, date } = newActivity;
     if (!user_id || !distance_km) return setMsg("user_id und distance_km erforderlich");
     try {
-      await axios.post(`/admin/activities?user_id=${encodeURIComponent(user_id)}&distance_km=${encodeURIComponent(distance_km)}${date ? "&date_str="+encodeURIComponent(date): ""}`);
+      await axios.post(`/api/admin/activities?user_id=${encodeURIComponent(user_id)}&distance_km=${encodeURIComponent(distance_km)}${date ? "&date_str="+encodeURIComponent(date): ""}`);
       setMsg("Aktivität erstellt");
       setNewActivity({ user_id: "", distance_km: "", date: "" });
       await loadActivities();
@@ -106,7 +106,7 @@ export default function AdminPage() {
   async function deleteActivity(id) {
     if (!window.confirm("Aktivität löschen?")) return;
     try {
-      await axios.delete(`/admin/activities/${id}`);
+      await axios.delete(`/api/admin/activities/${id}`);
       setMsg("Aktivität gelöscht");
       await loadActivities();
     } catch (e) {

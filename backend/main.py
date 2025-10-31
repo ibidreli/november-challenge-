@@ -77,7 +77,7 @@ if DB_AVAILABLE:
 	app.include_router(strava_webhook_router, prefix="/auth", tags=["auth"])  # <- webhook handler
 	app.include_router(users_router, prefix="/users", tags=["users"])
 	app.include_router(activities_router, prefix="/activities", tags=["activities"])
-	app.include_router(admin_router, prefix="/admin", tags=["admin"])
+	app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
 else:
 	# fallback: minimal info for debugging when DB/imports failed
 	@app.get("/debug/nodb")
