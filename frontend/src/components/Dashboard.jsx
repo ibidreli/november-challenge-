@@ -22,7 +22,7 @@ export default function Dashboard({ refreshKey = 0 }) {
           }),
         // Cache-Busting für die Rangliste -> immer frisch beim Reload
         axios
-          .get("/users/", { withCredentials: true, params: { t: Date.now() } })
+          .get("/users/", { withCredentials: false, params: { t: Date.now() } })
           .then((r) => r.data)
           .catch((e) => {
             console.warn("GET /users/ failed", e);

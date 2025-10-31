@@ -10,6 +10,8 @@ import logging
 import traceback
 from fastapi.responses import JSONResponse, HTMLResponse
 from urllib.parse import urlparse
+from routes import routes  # was du bereits hast
+
 
 
 
@@ -24,6 +26,7 @@ try:
 	from routes.activities import router as activities_router
 	from routes.users import router as users_router
 	from routes.strava_webhook import router as strava_webhook_router
+	from routes.admin import router as admin_router
 	# perform DB migrations / init that may raise
 	Base.metadata.create_all(bind=engine)
 	ensure_slots_column(engine)
@@ -75,6 +78,7 @@ if DB_AVAILABLE:
 	app.include_router(strava_webhook_router, prefix="/auth", tags=["auth"])  # <- webhook handler
 	app.include_router(users_router, prefix="/users", tags=["users"])
 	app.include_router(activities_router, prefix="/activities", tags=["activities"])
+	app.include_router(admin_router, prefix="/admin", tags=["admin"])
 else:
 	# fallback: minimal info for debugging when DB/imports failed
 	@app.get("/debug/nodb")
