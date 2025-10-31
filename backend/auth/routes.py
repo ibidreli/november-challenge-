@@ -111,8 +111,8 @@ def sync_recent_activities_from_strava(user: User, db: Session):
 	# compute start = first day of CHALLENGE_MONTH
 	today = datetime.date.today()
 	month = CHALLENGE_MONTH if CHALLENGE_MONTH else ROUTE_CHALLENGE_MONTH
-	# pick year: if current month >= target month -> current year, else previous year
-	year = today.year if today.month >= month else today.year - 1
+	# pick year: if current month > target month -> next year, else current year
+	year = today.year if today.month <= month else today.year + 1
 	start_date = datetime.date(year, month, 1)
 	# start of day -> epoch seconds
 	since_dt = datetime.datetime.combine(start_date, datetime.time.min)
