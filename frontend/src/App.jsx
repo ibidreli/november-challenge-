@@ -35,10 +35,10 @@ export default function App() {
     <div>
       <header className="header">
         <div className="header-left">
-          <img src={logo} alt="November Challenge" className="logo" />
+          <img src={logo} alt="November Jogging Challenge" className="logo" />
           <div className="app-title">
-            <div className="title-main">November Challenge</div>
-            <div className="title-sub">Monatliche Running Challenge</div>
+            <div className="title-main">November Jogging Challenge</div>
+            <div className="title-sub">Monatliche Jogging Challenge</div>
           </div>
         </div>
       </header>

@@ -22,7 +22,7 @@ export default function Dashboard({ refreshKey = 0 }) {
           }),
         // Cache-Busting für die Rangliste -> immer frisch beim Reload
         axios
-          .get("/users/", { withCredentials: false, params: { t: Date.now() } })
+          .get("/users/", { withCredentials: true, params: { t: Date.now() } })
           .then((r) => r.data)
           .catch((e) => {
             console.warn("GET /users/ failed", e);
@@ -173,7 +173,7 @@ export default function Dashboard({ refreshKey = 0 }) {
       <div style={{ marginTop: 18 }}>
         {view === "personal" && (
           <div>
-            <h2 style={{ marginTop: 0 }}>Deine Übersicht</h2>
+            <h2 style={{ marginTop: 0 }}>Übersicht</h2>
             {loading ? (
               <div style={{ color: "#666" }}>Lädt…</div>
             ) : !user ? (
@@ -227,7 +227,7 @@ export default function Dashboard({ refreshKey = 0 }) {
 
         {view === "public" && (
           <div>
-            <h2 style={{ marginTop: 0 }}>Öffentliche Rangliste</h2>
+            <h2 style={{ marginTop: 0 }}>Rangliste</h2>
             {loading ? (
               <div style={{ color: "#666" }}>Lädt…</div>
             ) : leaderboard.length === 0 ? (
