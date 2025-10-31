@@ -2,9 +2,13 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import Dashboard from "./components/Dashboard";
 import logo from "../logo/Logo.png"; // import logo from frontend/logo/Logo.png
-import AdminPage from "./pages/admin";
+import Admin from "./components/Admin";
 
 export default function App() {
+  // simple client-side routing: if path is /admin render Admin
+  if (typeof window !== "undefined" && window.location.pathname === "/admin") {
+    return <Admin />;
+  }
   const [refreshKey, setRefreshKey] = useState(0);
   const [syncing, setSyncing] = useState(false);
 
@@ -32,11 +36,6 @@ export default function App() {
     };
   }, []);
 
-  // simple client-side route: /admin -> AdminPage
-  if (typeof window !== "undefined" && window.location.pathname.startsWith("/admin")) {
-    return <AdminPage />;
-  }
-
   return (
     <div>
       <header className="header">
@@ -51,7 +50,9 @@ export default function App() {
 
       <main className="container" style={{ marginTop: 20 }}>
         {syncing && (
-          <div style={{ marginBottom: 0, color: "#666", fontSize: 0}} />
+          <div style={{ marginBottom: 0, color: "#666", fontSize: 0 }}>
+            
+          </div>
         )}
         <Dashboard refreshKey={refreshKey} />
       </main>
