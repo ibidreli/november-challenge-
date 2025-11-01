@@ -162,7 +162,9 @@ def sync_recent_activities_from_strava(user: User, db: Session):
 						continue
 					distance_m = a.get("distance") or 0
 					distance_km = float(distance_m) / 1000.0
-					start = a.get("start_date_local") or a.get("start_date")
+					# Use start_date (UTC) instead of start_date_local to avoid timezone issues
+					# start_date_local sometimes has Z suffix which is confusing
+					start = a.get("start_date")
 					if not start:
 						continue
 					if start.endswith("Z"):
