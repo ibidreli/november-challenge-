@@ -132,13 +132,16 @@ def sync_recent_activities_from_strava(user: User, db: Session):
 	try:
 		while True:
 			params = {"after": since_epoch, "per_page": per_page, "page": page}
+			logging.info("Fetching Strava activities for user %s (page %d) with token: %s...", user.id, page, user.access_token[:20] if user.access_token else "(none)")
 			r = requests.get(STRAVA_API_ACTIVITIES, headers=headers, params=params, timeout=15)
+			logging.info("Strava API response status: %d", r.status_code)
 			if r.status_code == 401:
 				# token invalid/expired — stop and surface the issue
-				logging.warning("Unauthorized when fetching activities for user %s", user.id)
-				return {"synced": synced, "error": "unauthorized"}
+				logging.warning("Unauthorized (401) when fetching activities for user %s. Response: %s", user.id, r.text[:200])
+				return {"synced": synced, "error": "unauthorized", "response": r.text[:200]}
 			r.raise_for_status()
 			activities = r.json() or []
+			logging.info("Received %d activities from Strava for user %s", len(activities), user.id)
 			if not activities:
 				break
 			for a in activities:
