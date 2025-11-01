@@ -277,16 +277,14 @@ except Exception as e:
 def ensure_slots_column(engine):
     """
     Ensure 'slots' column exists on users table.
-    - Postgres: add JSON column, initialize rows and set NOT NULL/default.
-    - SQLite: ALTER TABLE ADD COLUMN (TEXT) and initialize rows with JSON array string.
-    No-op for other DBs.
     """
     try:
         p = urlparse(DATABASE_URL or "")
+        # FIX: Default sollte [null]*30 sein, nicht []
         nulls = ",".join(["null"] * 30)
-        json_value = f"[{nulls}]"
+        json_default = f"'[{nulls}]'::json"
+        
         with engine.begin() as conn:
-            # Postgres path (unchanged behavior)
             if p.scheme and p.scheme.startswith("postgres"):
                 res = conn.execute(text("""
                     SELECT 1 FROM information_schema.columns
@@ -297,13 +295,12 @@ def ensure_slots_column(engine):
                     return
                 logging.info("Adding 'slots' column to users table (automatic startup migration).")
                 conn.execute(text("ALTER TABLE users ADD COLUMN slots JSON"))
-                conn.execute(text(f"UPDATE users SET slots = '[{nulls}]'::json WHERE slots IS NULL"))
-                conn.execute(text("ALTER TABLE users ALTER COLUMN slots SET DEFAULT '[]'::json"))
+                conn.execute(text(f"UPDATE users SET slots = {json_default} WHERE slots IS NULL"))
+                conn.execute(text(f"ALTER TABLE users ALTER COLUMN slots SET DEFAULT {json_default}"))
                 conn.execute(text("ALTER TABLE users ALTER COLUMN slots SET NOT NULL"))
                 logging.info("'slots' column added and initialized (Postgres).")
                 return
 
-            # SQLite path
             if p.scheme and p.scheme.startswith("sqlite"):
                 # check users table exists
                 t = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")).fetchone()

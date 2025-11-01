@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request, Depends, BackgroundTasks
-from fastapi.responses import JSONResponse, PlainTextResponse, HTMLResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy.orm import Session
 from database import get_db, SessionLocal
 from models.user import User
@@ -24,7 +24,15 @@ async def verify_challenge(request: Request):
 
 @router.post("/webhook")
 async def handle_webhook(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    payload = await request.json()
+    """
+    Handle Strava webhook events.
+    """
+    try:
+        payload = await request.json()
+    except Exception as e:
+        logging.warning("Failed to parse webhook payload: %s", e)
+        return JSONResponse({"status": "parse_error"})
+    
     obj_type = payload.get("object_type")
     aspect = payload.get("aspect_type")
     owner_id = payload.get("owner_id")
@@ -35,40 +43,77 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks, db
 
     user = db.query(User).filter_by(strava_id=owner_id).first()
     if not user:
-        return JSONResponse({"status": "user_not_found", "owner_id": owner_id})
+        # NEW: Silently ignore unknown users instead of failing
+        logging.debug("Webhook: unknown strava_id=%s", owner_id)
+        return JSONResponse({"status": "user_not_found"})
 
     access_token = user.access_token
     if not access_token:
-        return JSONResponse({"status": "no_token", "user_id": user.id})
+        # NEW: Schedule background retry instead of failing immediately
+        logging.info("Webhook: no token for user %s, scheduling background fetch", user.id)
+        background_tasks.add_task(fetch_and_process_activity, owner_id, object_id, user.id)
+        return JSONResponse({"status": "scheduled_background"})
 
-    # Try immediate fetch once
+    # Try immediate fetch, but don't fail if it doesn't work
     try:
         headers = {"Authorization": f"Bearer {access_token}"}
         r = requests.get(STRAVA_API_BASE + str(object_id), headers=headers, timeout=10)
         if r.status_code != 200:
-            # schedule background retry and return accepted
-            background_tasks.add_task(fetch_and_process_activity, owner_id, object_id)
+            # Schedule background retry
+            logging.info("Webhook: immediate fetch failed (status %s), scheduling retry", r.status_code)
+            background_tasks.add_task(fetch_and_process_activity, owner_id, object_id, user.id)
             return JSONResponse({"status": "scheduled_retry"})
         data = r.json()
+    except Exception as e:
+        logging.warning("Webhook: immediate fetch exception, scheduling retry: %s", e)
+        background_tasks.add_task(fetch_and_process_activity, owner_id, object_id, user.id)
+        return JSONResponse({"status": "scheduled_retry"})
+
+    # Process fetched activity
+    return _process_webhook_activity(user, object_id, data, db)
+
+
+def _process_webhook_activity(user: User, object_id: int, data: dict, db: Session):
+    """
+    Shared logic to process webhook activity data.
+    FIX: db.close() Fehler behandelt
+    """
+    try:
         # ignore non-Run activities
-        if (data.get("type") or "").lower() != "run":
+        if (data.get("type") or "").lower() not in {"run", "trail run", "virtual run"}:
             return JSONResponse({"status": "ignored_non_run", "type": data.get("type")})
+        
         distance_m = data.get("distance", 0)
         distance_km = (distance_m or 0) / 1000.0
+        
+        # Parse date robustly (use start_date_local if available)
         start = data.get("start_date_local") or data.get("start_date")
-        if start and start.endswith("Z"):
-            start = start[:-1]
-        if start:
-            dt = datetime.datetime.fromisoformat(start)
-            act_date = dt.date()
-        else:
-            act_date = datetime.date.today()
+        if not start:
+            return JSONResponse({"status": "no_start_date"})
+        
+        # Strip timezone info and parse as local time
+        s = str(start).strip()
+        if "+" in s:
+            s = s.split("+")[0]
+        if "-" in s and "T" in s:
+            parts = s.split("T")
+            if len(parts) == 2 and "-" in parts[1]:
+                s = parts[0] + "T" + parts[1].split("-")[0]
+        if s.endswith("Z"):
+            s = s[:-1]
+        
+        try:
+            dt = datetime.datetime.fromisoformat(s)
+        except ValueError:
+            date_part = s.split("T")[0]
+            dt = datetime.datetime.fromisoformat(date_part)
+        
+        act_date = dt.date()
     except Exception as e:
-        # schedule background retry on exception
-        background_tasks.add_task(fetch_and_process_activity, owner_id, object_id)
-        return JSONResponse({"status": "scheduled_retry", "error": str(e)}, status_code=202)
+        logging.warning("Webhook: failed to parse activity date: %s", e)
+        return JSONResponse({"status": "date_parse_error"})
 
-    # ensure Activity exists in DB (create if missing)
+    # ensure Activity exists in DB
     activity = db.query(Activity).filter(Activity.strava_id == str(object_id)).first()
     try:
         if not activity:
@@ -78,124 +123,64 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks, db
             db.refresh(activity)
     except Exception as e:
         db.rollback()
-        return JSONResponse({"status": "db_error_creating_activity", "error": str(e)}, status_code=500)
+        logging.exception("Webhook: failed to create activity")
+        return JSONResponse({"status": "db_error_creating_activity"}, status_code=500)
 
-    # compute daily cap and candidate_start
-    day = activity.date.day if activity.date else datetime.date.today().day
-    max_allowed = 30 if day == 30 else 29
-    candidate_start = min(int((activity.distance_km or 0) // 1), max_allowed)
-
-    # assign slot via user's helper (this updates slots and total_score)
-    assigned_km = user.assign_activity(candidate_start, activity.id)
-    if assigned_km:
-        try:
-            claim = Claim(user_id=user.id, km=assigned_km, date=activity.date or datetime.date.today(), activity_id=activity.id)
-            db.add(claim)
-            activity.effective_km = assigned_km
-            activity.status = "claimed"
-            try:
-                flag_modified(user, "slots")
-            except Exception:
-                pass
-            db.add(user)
-            db.add(activity)
-            db.commit()
-            db.refresh(claim)
-            return JSONResponse({"status": "ok", "assigned_km": assigned_km, "total_score": user.total_score})
-        except Exception as e:
-            db.rollback()
-            return JSONResponse({"status": "db_error_claim", "error": str(e)}, status_code=500)
-    else:
-        try:
-            user.ensure_slots()
-            flag_modified(user, "slots")
-            db.add(user)
-            db.commit()
-        except Exception:
-            db.rollback()
-        return JSONResponse({"status": "no_slot_available", "total_score": user.total_score})
+    # Process using shared logic
+    try:
+        from routes.activities import process_activity_instance
+    except Exception:
+        from backend.routes.activities import process_activity_instance
+    
+    try:
+        result = process_activity_instance(activity, db)
+        if "error" in result:
+            return JSONResponse({"status": "processing_error", "error": result["error"]}, status_code=400)
+        return JSONResponse({"status": "ok", "result": result})
+    except Exception as e:
+        logging.exception("Webhook: activity processing failed")
+        return JSONResponse({"status": "processing_exception", "error": str(e)}, status_code=500)
+    finally:
+        # FIX: Stelle sicher db nicht doppelt geschlossen wird
+        # (handle_webhook schließt nicht, nur background task)
+        pass
 
 
 # Background retry helper (runs in background thread)
-def fetch_and_process_activity(owner_id: int, object_id: int, attempts: int = 6, initial_delay: int = 5):
+def fetch_and_process_activity(owner_id: int, object_id: int, user_id: int = None, attempts: int = 6, initial_delay: int = 5):
+    """
+    Background task to fetch and process activity when immediate webhook processing isn't possible.
+    Retries with exponential backoff.
+    """
     db = SessionLocal()
     try:
+        user = db.query(User).filter_by(strava_id=owner_id).first()
+        if not user or not user.access_token:
+            logging.warning("Background fetch: user missing or no token for owner %s", owner_id)
+            return
+
         for attempt in range(attempts):
             try:
-                user = db.query(User).filter_by(strava_id=owner_id).first()
-                if not user or not user.access_token:
-                    logging.warning("Background fetch: user missing or no token for owner %s", owner_id)
-                    return
                 headers = {"Authorization": f"Bearer {user.access_token}"}
                 r = requests.get(STRAVA_API_BASE + str(object_id), headers=headers, timeout=10)
+                
                 if r.status_code == 200:
                     data = r.json()
-                    # ignore non-Run activities in background retry as well
-                    if (data.get("type") or "").lower() != "run":
-                        logging.debug("Background fetch: ignoring non-Run activity %s (type=%s)", object_id, data.get("type"))
-                        return
-                    distance_m = data.get("distance", 0)
-                    distance_km = (distance_m or 0) / 1000.0
-                    start = data.get("start_date_local") or data.get("start_date")
-                    if start and start.endswith("Z"):
-                        start = start[:-1]
-                    if start:
-                        dt = datetime.datetime.fromisoformat(start)
-                        act_date = dt.date()
-                    else:
-                        act_date = datetime.date.today()
-                    # ensure Activity exists
-                    activity = db.query(Activity).filter(Activity.strava_id == str(object_id)).first()
-                    try:
-                        if not activity:
-                            activity = Activity(user_id=user.id, strava_id=str(object_id), date=act_date, distance_km=distance_km, status="fetched")
-                            db.add(activity)
-                            db.commit()
-                            db.refresh(activity)
-                    except Exception:
-                        db.rollback()
-                        logging.exception("Background fetch: failed to create activity")
-                        return
-                    # compute cap and assign
-                    day = activity.date.day if activity.date else datetime.date.today().day
-                    max_allowed = 30 if day == 30 else 29
-                    candidate_start = min(int((activity.distance_km or 0) // 1), max_allowed)
-                    assigned_km = user.assign_activity(candidate_start, activity.id)
-                    if assigned_km:
-                        try:
-                            claim = Claim(user_id=user.id, km=assigned_km, date=activity.date or datetime.date.today(), activity_id=activity.id)
-                            db.add(claim)
-                            activity.effective_km = assigned_km
-                            activity.status = "claimed"
-                            try:
-                                flag_modified(user, "slots")
-                            except Exception:
-                                pass
-                            db.add(user)
-                            db.add(activity)
-                            db.commit()
-                            logging.info("Background fetch: processed activity %s for owner %s (km=%s)", object_id, owner_id, assigned_km)
-                        except Exception:
-                            db.rollback()
-                            logging.exception("Background fetch: failed to persist claim")
-                    else:
-                        # persist ensure_slots so frontend shows correct slots array
-                        try:
-                            user.ensure_slots()
-                            flag_modified(user, "slots")
-                            db.add(user)
-                            db.commit()
-                        except Exception:
-                            db.rollback()
+                    result = _process_webhook_activity(user, object_id, data, db)
+                    logging.info("Background fetch succeeded for activity %s owner %s: %s", object_id, owner_id, result)
                     return
                 else:
-                    # not ready yet, wait and retry
-                    wait = initial_delay * (2 ** attempt)
-                    time.sleep(wait)
-            except Exception:
-                # transient error, wait and retry
-                wait = initial_delay * (2 ** attempt)
-                time.sleep(wait)
+                    # 401 Unauthorized or other error — wait and retry
+                    wait_time = initial_delay * (2 ** attempt)
+                    logging.debug("Background fetch attempt %d failed (status %s), waiting %ds before retry", attempt + 1, r.status_code, wait_time)
+                    time.sleep(wait_time)
+            except Exception as e:
+                wait_time = initial_delay * (2 ** attempt)
+                logging.debug("Background fetch attempt %d exception: %s, waiting %ds", attempt + 1, e, wait_time)
+                time.sleep(wait_time)
+        
         logging.warning("Background fetch: giving up after %s attempts for activity %s owner %s", attempts, object_id, owner_id)
+    except Exception as e:
+        logging.exception("Background fetch fatal error: %s", e)
     finally:
         db.close()

@@ -20,9 +20,9 @@ export default function Dashboard({ refreshKey = 0 }) {
             console.warn("GET /users/me failed", e);
             return null;
           }),
-        // Cache-Busting für die Rangliste -> immer frisch beim Reload
+        // FIX: withCredentials: false entfernen (nutze globale Einstellung)
         axios
-          .get("/users/", { withCredentials: false, params: { t: Date.now() } })
+          .get("/users/", { params: { t: Date.now() } })
           .then((r) => r.data)
           .catch((e) => {
             console.warn("GET /users/ failed", e);
@@ -66,26 +66,21 @@ export default function Dashboard({ refreshKey = 0 }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey]);
 
+  // FIX: kmFromSlots und daysFromSlots für integer slots
   const kmFromSlots = (slots) => {
     if (!Array.isArray(slots)) return 0;
     return slots.reduce((sum, s) => {
-      if (!s) return sum;
-      if (typeof s === "number") return sum + Number(s);
-      if (typeof s === "object" && s.km != null) return sum + Number(s.km);
+      if (s === null || s === undefined) return sum;
+      if (typeof s === "number") return sum + s;
       return sum;
     }, 0);
   };
 
-  // Anzahl Tage mit >0 km
   const daysFromSlots = (slots) => {
     if (!Array.isArray(slots)) return 0;
     return slots.reduce((n, s) => {
-      if (!s) return n;
+      if (s === null || s === undefined) return n;
       if (typeof s === "number") return s > 0 ? n + 1 : n;
-      if (typeof s === "object") {
-        const km = Number(s.km ?? 0);
-        return km > 0 ? n + 1 : n;
-      }
       return n;
     }, 0);
   };

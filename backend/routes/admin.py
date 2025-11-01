@@ -325,10 +325,11 @@ def delete_activity_admin(
         if user.total_score and claim.km:
             user.total_score = max(0, (user.total_score or 0) - claim.km)
         
-        # Remove from slots
+        # FIX: slots sind integers, nicht dicts mit activity_id
         if user.slots and isinstance(user.slots, list):
             for i, slot in enumerate(user.slots):
-                if slot and isinstance(slot, dict) and slot.get("activity_id") == activity_id:
+                # Wenn slot dem km der Claim entspricht, setze auf None
+                if slot == claim.km:
                     user.slots[i] = None
                     break
         

@@ -115,12 +115,12 @@ def list_users(db: Session = Depends(get_db)):
                 u.ensure_slots()
             except Exception:
                 pass
+            # FIX: slots sind integers, nicht dicts
             km_total = 0
             slots_out = []
             for s in (u.slots or []):
-                # normalize slot representation: either null or integer km
-                if isinstance(s, dict) and "km" in s and isinstance(s["km"], (int, float)):
-                    km_val = int(s["km"])
+                if isinstance(s, (int, float)):
+                    km_val = int(s)
                     km_total += km_val
                     slots_out.append(km_val)
                 else:
@@ -136,5 +136,4 @@ def list_users(db: Session = Depends(get_db)):
         out.sort(key=lambda x: (int(x.get("total_score", 0)), int(x.get("km_total", 0))), reverse=True)
         return out
     except Exception as e:
-        # return an informative response instead of failing silently in frontend
         return {"error": "list_users_failed", "details": str(e)}

@@ -38,6 +38,7 @@ class User(Base):
     def assign_activity(self, distance_km: float, activity_id: int):
         """
         Atomar: kopiere slots, setze den slot, ersetze self.slots und markiere Änderung.
+        FIX: Speichere nur integers in slots, nicht dicts
         """
         self.ensure_slots()
         km = int(math.floor(distance_km))
@@ -48,7 +49,8 @@ class User(Base):
         for cand in range(km, 0, -1):
             idx = cand - 1
             if idx < 30 and (current[idx] is None):
-                current[idx] = {"km": cand, "activity_id": activity_id}
+                # FIX: Speichere nur integer, nicht dict
+                current[idx] = cand
                 # replace whole list and flag as modified
                 self.slots = current
                 try:

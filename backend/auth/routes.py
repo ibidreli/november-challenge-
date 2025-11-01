@@ -92,16 +92,15 @@ def _invalid_client_config():
 def sync_recent_activities_from_strava(user: User, db: Session):
 	"""
 	Fetch activities for the authenticated user from Strava starting from the
-	first day of CHALLENGE_MONTH (current year or previous year if month not yet reached),
-	insert new Activity rows and process them using the app's processing helper.
+	first day of CHALLENGE_MONTH, insert new Activity rows and process them.
+	Uses correct datetime parsing (local time, ignore UTC offset).
 	Returns summary dict.
 	"""
 	from models.activity import Activity as ActivityModel
-	# import processing helper locally to avoid circular imports
 	try:
-		from routes.activities import process_activity_instance, CHALLENGE_MONTH as ROUTE_CHALLENGE_MONTH
+		from routes.activities import process_activity_instance
 	except Exception:
-		from backend.routes.activities import process_activity_instance, CHALLENGE_MONTH as ROUTE_CHALLENGE_MONTH
+		from backend.routes.activities import process_activity_instance
 
 	STRAVA_API_ACTIVITIES = "https://www.strava.com/api/v3/athlete/activities"
 	if not user or not user.access_token:
@@ -110,9 +109,9 @@ def sync_recent_activities_from_strava(user: User, db: Session):
 
 	# compute start = first day of CHALLENGE_MONTH
 	today = datetime.date.today()
-	month = CHALLENGE_MONTH if CHALLENGE_MONTH else ROUTE_CHALLENGE_MONTH
-	# pick year: if current month > target month -> next year, else current year
-	year = today.year if today.month <= month else today.year + 1
+	month = int(os.getenv("CHALLENGE_MONTH", "11"))
+	# pick year: if current month > target month -> last year, else current year
+	year = today.year if today.month >= month else today.year - 1
 	start_date = datetime.date(year, month, 1)
 	# start of day -> epoch seconds
 	since_dt = datetime.datetime.combine(start_date, datetime.time.min)
@@ -127,7 +126,6 @@ def sync_recent_activities_from_strava(user: User, db: Session):
 			params = {"after": since_epoch, "per_page": per_page, "page": page}
 			r = requests.get(STRAVA_API_ACTIVITIES, headers=headers, params=params, timeout=15)
 			if r.status_code == 401:
-				# token invalid/expired — stop and surface the issue
 				logging.warning("Unauthorized when fetching activities for user %s", user.id)
 				return {"synced": synced, "error": "unauthorized"}
 			r.raise_for_status()
@@ -136,31 +134,46 @@ def sync_recent_activities_from_strava(user: User, db: Session):
 				break
 			for a in activities:
 				try:
-					# --- nur Runs verarbeiten: überspringe Aktivitäten, die nicht vom Typ "Run" sind ---
-					# Accept: Run, Trail Run, Virtual Run
+					# nur Runs verarbeiten
 					activity_type = (a.get("type") or "").lower().strip()
 					allowed_types = ["run", "trail run", "virtual run"]
 					if activity_type not in allowed_types:
-						logging.debug("Skipping non-Run activity from Strava import: id=%s, type=%s (allowed: %s)", a.get("id"), a.get("type"), allowed_types)
+						logging.debug("Skipping non-Run activity: id=%s, type=%s", a.get("id"), a.get("type"))
 						continue
 					
 					strava_aid = str(a.get("id"))
-					# skip if already stored
 					exists = db.query(ActivityModel).filter(ActivityModel.strava_id == strava_aid).first()
 					if exists:
 						continue
+					
 					distance_m = a.get("distance") or 0
 					distance_km = float(distance_m) / 1000.0
+					
+					# NEW: Robust datetime parsing (ignore UTC offset, use local time as-is)
 					start = a.get("start_date_local") or a.get("start_date")
 					if not start:
+						logging.debug("Activity %s has no start_date", strava_aid)
 						continue
-					if start.endswith("Z"):
-						start = start[:-1]
-					dt = datetime.datetime.fromisoformat(start)
+					
+					s = str(start).strip()
+					if "+" in s:
+						s = s.split("+")[0]
+					if "-" in s and "T" in s:
+						parts = s.split("T")
+						if len(parts) == 2 and "-" in parts[1]:
+							s = parts[0] + "T" + parts[1].split("-")[0]
+					if s.endswith("Z"):
+						s = s[:-1]
+					
+					try:
+						dt = datetime.datetime.fromisoformat(s)
+					except ValueError:
+						date_part = s.split("T")[0]
+						dt = datetime.datetime.fromisoformat(date_part)
+					
 					act_date = dt.date()
 					
-					# NEW: Check if there's already a manual activity for this user/date
-					# If so, skip this Strava import (manual entries have priority)
+					# Check if there's already a manual activity for this user/date
 					manual_exists = db.query(ActivityModel).filter(
 						ActivityModel.user_id == user.id,
 						ActivityModel.date == act_date,
@@ -175,10 +188,10 @@ def sync_recent_activities_from_strava(user: User, db: Session):
 					db.add(activity_obj)
 					db.commit()
 					db.refresh(activity_obj)
-					# process using helper (use CHALLENGE_MONTH env if set)
-					simulate_month = int(os.getenv("CHALLENGE_MONTH")) if os.getenv("CHALLENGE_MONTH") else None
+					
+					# process
 					try:
-						process_activity_instance(activity_obj, db, simulate_month=simulate_month)
+						process_activity_instance(activity_obj, db)
 					except Exception:
 						logging.exception("Processing activity failed for %s", strava_aid)
 					synced += 1
