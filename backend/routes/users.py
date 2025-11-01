@@ -95,6 +95,8 @@ def debug_sync_user(user_id: int, db: Session = Depends(get_db)):
         "strava_id": user.strava_id,
         "has_access_token": bool(user.access_token),
         "has_refresh_token": bool(user.refresh_token),
+        "access_token_preview": user.access_token[:20] if user.access_token else None,
+        "refresh_token_preview": user.refresh_token[:20] if user.refresh_token else None,
     }
     
     try:
@@ -127,6 +129,61 @@ def debug_sync_user(user_id: int, db: Session = Depends(get_db)):
         for a in activities
     ]
 
+    return debug_info
+
+
+@router.get("/debug_token_test/{user_id}")
+def debug_token_test(user_id: int, db: Session = Depends(get_db)):
+    """
+    Debug endpoint: Test if the user's access token is valid by calling Strava API directly.
+    Returns athlete info if token is valid, or error if not.
+    """
+    import requests
+    import datetime
+    
+    user = db.query(User).filter_by(id=user_id).first()
+    if not user:
+        return {"error": "user_not_found", "user_id": user_id}
+    
+    debug_info = {
+        "user_id": user.id,
+        "user_name": user.name,
+        "strava_id": user.strava_id,
+    }
+    
+    # First, try to refresh the token
+    try:
+        from auth.routes import refresh_user_token
+        refresh_result = refresh_user_token(user, db)
+        debug_info["token_refresh_result"] = "success" if refresh_result else "failed"
+    except Exception as e:
+        debug_info["token_refresh_error"] = str(e)
+    
+    # Now test the token by calling Strava API
+    if not user.access_token:
+        debug_info["token_test_result"] = "no_access_token"
+        return debug_info
+    
+    try:
+        headers = {"Authorization": f"Bearer {user.access_token}"}
+        # Try to get athlete info (simple test that doesn't count against rate limits much)
+        r = requests.get("https://www.strava.com/api/v3/athlete", headers=headers, timeout=10)
+        
+        debug_info["strava_api_status"] = r.status_code
+        debug_info["strava_api_response"] = r.text[:500]  # First 500 chars
+        
+        if r.status_code == 200:
+            athlete = r.json()
+            debug_info["athlete_name"] = athlete.get("firstname", "") + " " + athlete.get("lastname", "")
+            debug_info["token_test_result"] = "valid"
+        elif r.status_code == 401:
+            debug_info["token_test_result"] = "unauthorized - token is invalid or expired"
+        else:
+            debug_info["token_test_result"] = f"error_{r.status_code}"
+    except Exception as e:
+        debug_info["token_test_error"] = str(e)
+        debug_info["token_test_result"] = "request_failed"
+    
     return debug_info
 
 
