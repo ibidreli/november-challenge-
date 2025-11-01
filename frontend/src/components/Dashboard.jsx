@@ -14,7 +14,7 @@ export default function Dashboard({ refreshKey = 0 }) {
     try {
       const [u, lb] = await Promise.all([
         axios
-          .get("/users/me")
+          .get("/users/me?sync=true")
           .then((r) => r.data)
           .catch((e) => {
             console.warn("GET /users/me failed", e);
