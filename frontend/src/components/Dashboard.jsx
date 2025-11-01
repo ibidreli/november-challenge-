@@ -12,6 +12,16 @@ export default function Dashboard({ refreshKey = 0 }) {
   const load = async () => {
     setLoading(true);
     try {
+      // FIX: Sync current user's activities FIRST before loading leaderboard
+      if (user?.strava_id) {
+        try {
+          await axios.post(`/activities/sync_recent/${user.strava_id}`);
+          console.log("User activities synced");
+        } catch (e) {
+          console.warn("Sync user activities failed:", e);
+        }
+      }
+
       const [u, lb] = await Promise.all([
         axios
           .get("/users/me")
