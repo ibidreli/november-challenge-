@@ -162,17 +162,15 @@ def sync_recent_activities_from_strava(user: User, db: Session):
 						continue
 					distance_m = a.get("distance") or 0
 					distance_km = float(distance_m) / 1000.0
-					# Use start_date_local to get the user's local date (without timezone)
-					# This ensures we compare the actual date the user ran
-					start_local = a.get("start_date_local")
-					if not start_local:
+					# Use start_date (UTC) instead of start_date_local to avoid timezone issues
+					# start_date_local sometimes has Z suffix which is confusing
+					start = a.get("start_date")
+					if not start:
 						continue
-					# Remove Z if present (sometimes it has Z even though it's "local")
-					if start_local.endswith("Z"):
-						start_local = start_local[:-1]
-					dt = datetime.datetime.fromisoformat(start_local)
+					if start.endswith("Z"):
+						start = start[:-1]
+					dt = datetime.datetime.fromisoformat(start)
 					act_date = dt.date()
-					logging.info("Activity %s: start_date_local=%s -> act_date=%s", a.get("id"), start_local, act_date)
 					
 					# NEW: Check if there's already a manual activity for this user/date
 					# If so, skip this Strava import (manual entries have priority)

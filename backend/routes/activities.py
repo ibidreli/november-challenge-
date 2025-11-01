@@ -33,9 +33,6 @@ def process_activity_instance(activity: Activity, db: Session, simulate_month: i
     if not isinstance(act_date, datetime.date):
         return {"error": "Activity date invalid"}
 
-    # Get the raw activity for checking the time
-    raw_activity = db.query(Activity).filter(Activity.id == activity.id).first()
-    
     # Only one claim per user per day
     existing_claim = db.query(Claim).filter(Claim.user_id == user.id, Claim.date == act_date).first()
     if existing_claim:
@@ -44,16 +41,8 @@ def process_activity_instance(activity: Activity, db: Session, simulate_month: i
     # Determine month to use (env override or simulate param)
     month_to_check = simulate_month if simulate_month is not None else CHALLENGE_MONTH
 
-    # Special case: Oct 31 after 23:00 UTC = Nov 1 local time
-    # Accept these activities and adjust them to Nov 1
-    if act_date.month == 10 and act_date.day == 31 and month_to_check == 11:
-        # Check if activity.created_at or other indicator shows it's late enough
-        # For now, accept all Oct 31 activities for November challenge (they're at the edge)
-        act_date = datetime.date(act_date.year, 11, 1)
-        import logging
-        logging.info("Adjusted Oct 31 activity to Nov 1 for user %s", user.id)
-    elif act_date.month not in [month_to_check]:
-        return {"message": "Activity is outside challenge month; ignored for challenge.", "month_checked": month_to_check, "act_date": str(act_date)}
+    if month_to_check != act_date.month:
+        return {"message": "Activity is outside challenge month; ignored for challenge.", "month_checked": month_to_check}
 
     day = act_date.day
     max_allowed = 30 if day == 30 else 29
