@@ -79,6 +79,57 @@ def sync_all_users(db: Session = Depends(get_db)):
     return {"synced": len(summary), "details": summary}
 
 
+@router.get("/debug_sync/{user_id}")
+def debug_sync_user(user_id: int, db: Session = Depends(get_db)):
+    """
+    Debug endpoint: Trigger sync for specific user and return detailed results.
+    Shows what activities were synced, what was filtered, errors, etc.
+    """
+    user = db.query(User).filter_by(id=user_id).first()
+    if not user:
+        return {"error": "user_not_found", "user_id": user_id}
+    
+    debug_info = {
+        "user_id": user.id,
+        "user_name": user.name,
+        "strava_id": user.strava_id,
+        "has_access_token": bool(user.access_token),
+        "has_refresh_token": bool(user.refresh_token),
+    }
+    
+    try:
+        from auth.routes import sync_recent_activities_from_strava
+    except Exception:
+        from backend.auth.routes import sync_recent_activities_from_strava
+
+    try:
+        result = sync_recent_activities_from_strava(user, db)
+        debug_info["sync_result"] = result
+    except Exception as e:
+        debug_info["sync_error"] = str(e)
+        import traceback
+        debug_info["sync_traceback"] = traceback.format_exc()
+
+    # Also show current activities in DB for this user
+    from models.activity import Activity
+    activities = db.query(Activity).filter_by(user_id=user.id).all()
+    debug_info["db_activities_count"] = len(activities)
+    debug_info["db_activities"] = [
+        {
+            "id": a.id,
+            "strava_id": a.strava_id,
+            "date": str(a.date) if a.date else None,
+            "distance_km": a.distance_km,
+            "status": a.status,
+            "is_manual": a.is_manual,
+            "effective_km": a.effective_km,
+        }
+        for a in activities
+    ]
+
+    return debug_info
+
+
 # New: simple listing endpoint for leaderboard
 @router.get("/debug_raw")
 def debug_raw_users(db: Session = Depends(get_db)):
