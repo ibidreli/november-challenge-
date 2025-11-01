@@ -121,9 +121,10 @@ def sync_recent_activities_from_strava(user: User, db: Session):
 	# pick year: if current month > target month -> next year, else current year
 	year = today.year if today.month <= month else today.year + 1
 	start_date = datetime.date(year, month, 1)
-	# start of day -> epoch seconds
-	since_dt = datetime.datetime.combine(start_date, datetime.time.min)
+	# start of day in UTC (NOT local time!)
+	since_dt = datetime.datetime(year, month, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
 	since_epoch = int(since_dt.timestamp())
+	logging.info("Sync: fetching activities since %s (UTC epoch %d) for user %s", since_dt, since_epoch, user.id)
 
 	headers = {"Authorization": f"Bearer {user.access_token}"}
 	per_page = 200
