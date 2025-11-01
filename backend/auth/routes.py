@@ -108,23 +108,15 @@ def sync_recent_activities_from_strava(user: User, db: Session):
 		logging.info("No user or access_token for sync.")
 		return {"synced": 0, "reason": "no_token"}
 
-	# Refresh token if needed (Strava tokens expire after 6 hours)
-	try:
-		if not refresh_user_token(user, db):
-			logging.warning("Token refresh failed for user %s, proceeding with current token", user.id)
-	except Exception:
-		logging.exception("Error refreshing token for user %s", user.id)
-
 	# compute start = first day of CHALLENGE_MONTH
 	today = datetime.date.today()
 	month = CHALLENGE_MONTH if CHALLENGE_MONTH else ROUTE_CHALLENGE_MONTH
 	# pick year: if current month > target month -> next year, else current year
 	year = today.year if today.month <= month else today.year + 1
 	start_date = datetime.date(year, month, 1)
-	# start of day in UTC (NOT local time!)
-	since_dt = datetime.datetime(year, month, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
+	# start of day -> epoch seconds
+	since_dt = datetime.datetime.combine(start_date, datetime.time.min)
 	since_epoch = int(since_dt.timestamp())
-	logging.info("Sync: fetching activities since %s (UTC epoch %d) for user %s", since_dt, since_epoch, user.id)
 
 	headers = {"Authorization": f"Bearer {user.access_token}"}
 	per_page = 200
@@ -133,16 +125,13 @@ def sync_recent_activities_from_strava(user: User, db: Session):
 	try:
 		while True:
 			params = {"after": since_epoch, "per_page": per_page, "page": page}
-			logging.info("Fetching Strava activities for user %s (page %d) with token: %s...", user.id, page, user.access_token[:20] if user.access_token else "(none)")
 			r = requests.get(STRAVA_API_ACTIVITIES, headers=headers, params=params, timeout=15)
-			logging.info("Strava API response status: %d", r.status_code)
 			if r.status_code == 401:
 				# token invalid/expired — stop and surface the issue
-				logging.warning("Unauthorized (401) when fetching activities for user %s. Response: %s", user.id, r.text[:200])
-				return {"synced": synced, "error": "unauthorized", "response": r.text[:200]}
+				logging.warning("Unauthorized when fetching activities for user %s", user.id)
+				return {"synced": synced, "error": "unauthorized"}
 			r.raise_for_status()
 			activities = r.json() or []
-			logging.info("Received %d activities from Strava for user %s", len(activities), user.id)
 			if not activities:
 				break
 			for a in activities:
@@ -162,11 +151,9 @@ def sync_recent_activities_from_strava(user: User, db: Session):
 						continue
 					distance_m = a.get("distance") or 0
 					distance_km = float(distance_m) / 1000.0
-					# Use start_date_local (the actual local time of the activity)
 					start = a.get("start_date_local") or a.get("start_date")
 					if not start:
 						continue
-					# Remove Z suffix if present (it's not real UTC when it comes from start_date_local)
 					if start.endswith("Z"):
 						start = start[:-1]
 					dt = datetime.datetime.fromisoformat(start)

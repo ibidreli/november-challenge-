@@ -14,7 +14,7 @@ export default function Dashboard({ refreshKey = 0 }) {
     try {
       const [u, lb] = await Promise.all([
         axios
-          .get("/users/me?sync=true")
+          .get("/users/me")
           .then((r) => r.data)
           .catch((e) => {
             console.warn("GET /users/me failed", e);
@@ -185,7 +185,7 @@ export default function Dashboard({ refreshKey = 0 }) {
               padding: "14px 16px"
             }}
           >
-            Zusammen haben wir: {totalKmAll} km
+          Zusammen haben wir <br />{totalKmAll} km gesammelt!
           </button>
         </div>
       )}
