@@ -93,7 +93,7 @@ def sync_recent_activities_from_strava(user: User, db: Session):
 	"""
 	Fetch activities for the authenticated user from Strava starting from the
 	first day of CHALLENGE_MONTH, insert new Activity rows and process them.
-	Uses correct datetime parsing: ALWAYS use start_date_local (local time).
+	Uses correct datetime parsing (local time, ignore UTC offset).
 	Returns summary dict.
 	"""
 	from models.activity import Activity as ActivityModel
@@ -110,8 +110,10 @@ def sync_recent_activities_from_strava(user: User, db: Session):
 	# compute start = first day of CHALLENGE_MONTH
 	today = datetime.date.today()
 	month = int(os.getenv("CHALLENGE_MONTH", "11"))
+	# pick year: if current month > target month -> last year, else current year
 	year = today.year if today.month >= month else today.year - 1
 	start_date = datetime.date(year, month, 1)
+	# start of day -> epoch seconds
 	since_dt = datetime.datetime.combine(start_date, datetime.time.min)
 	since_epoch = int(since_dt.timestamp())
 
@@ -132,6 +134,7 @@ def sync_recent_activities_from_strava(user: User, db: Session):
 				break
 			for a in activities:
 				try:
+					# nur Runs verarbeiten
 					activity_type = (a.get("type") or "").lower().strip()
 					allowed_types = ["run", "trail run", "virtual run"]
 					if activity_type not in allowed_types:
@@ -146,15 +149,13 @@ def sync_recent_activities_from_strava(user: User, db: Session):
 					distance_m = a.get("distance") or 0
 					distance_km = float(distance_m) / 1000.0
 					
-					# NEW: ALWAYS prioritize start_date_local, fallback to start_date
-					# Both treated as LOCAL time (no UTC conversion)
+					# NEW: Robust datetime parsing (ignore UTC offset, use local time as-is)
 					start = a.get("start_date_local") or a.get("start_date")
 					if not start:
 						logging.debug("Activity %s has no start_date", strava_aid)
 						continue
 					
 					s = str(start).strip()
-					# Strip timezone info (treat everything as local)
 					if "+" in s:
 						s = s.split("+")[0]
 					if "-" in s and "T" in s:
@@ -163,8 +164,6 @@ def sync_recent_activities_from_strava(user: User, db: Session):
 							s = parts[0] + "T" + parts[1].split("-")[0]
 					if s.endswith("Z"):
 						s = s[:-1]
-					if "." in s:
-						s = s.split(".")[0]
 					
 					try:
 						dt = datetime.datetime.fromisoformat(s)
@@ -173,7 +172,6 @@ def sync_recent_activities_from_strava(user: User, db: Session):
 						dt = datetime.datetime.fromisoformat(date_part)
 					
 					act_date = dt.date()
-					logging.debug(f"Parsed activity date: {act_date} (from {start})")
 					
 					# Check if there's already a manual activity for this user/date
 					manual_exists = db.query(ActivityModel).filter(
@@ -199,6 +197,7 @@ def sync_recent_activities_from_strava(user: User, db: Session):
 					synced += 1
 				except Exception:
 					logging.exception("Error while importing an activity; skipping.")
+			# next page
 			page += 1
 	except Exception as e:
 		logging.exception("Failed to fetch athlete activities: %s", e)

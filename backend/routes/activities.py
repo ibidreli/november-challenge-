@@ -11,7 +11,6 @@ import requests
 import os
 import traceback
 from typing import Optional, List, Tuple, Dict, Any
-import logging
 
 router = APIRouter()
 
@@ -62,63 +61,43 @@ def _in_challenge_window(d: datetime.date, month: int = None) -> bool:
 def _parse_activity_date_from_payload(data: Dict[str, Any]) -> datetime.date:
     """
     Parse activity date from Strava payload.
-    PRIORITY: Always use start_date_local (athlete's local time).
-    Only use start_date as fallback if start_date_local missing.
-    NEVER convert UTC — always interpret as local time.
+    Prioritize start_date_local (which is already in the athlete's local time).
+    Ignore UTC offset in both fields.
     """
-    # PREFER start_date_local (it's already athlete's local time, no conversion needed)
-    start = data.get("start_date_local")
-    
-    # Only fallback to start_date if start_date_local is missing
+    start = data.get("start_date_local") or data.get("start_date")
     if not start:
-        start = data.get("start_date")
-    
-    if not start:
-        raise ValueError("activity missing both start_date_local and start_date")
+        raise ValueError("activity missing start_date")
     
     s = str(start).strip()
-    logging.debug(f"_parse_activity_date_from_payload: raw input = {s}, is_start_date_local={bool(data.get('start_date_local'))}")
     
+    # Remove timezone info (Z, +00:00, etc.) — we want local time as-is
+    # Split on 'T' and take date part, or parse datetime and extract date
     try:
-        # Step 1: Remove timezone info completely (treat all as local time)
-        # Format examples:
-        # - "2025-11-01T00:40:00.000Z" (Z suffix — remove it, treat as local)
-        # - "2025-11-01T00:40:00.000+00:00" (offset — remove it, treat as local)
-        # - "2025-11-01T00:40:00.000-05:00" (offset — remove it, treat as local)
-        # - "2025-11-01T00:40:00" (no tz — already local)
-        
-        # Remove 'Z' suffix if present
-        if s.endswith('Z'):
+        # Remove any timezone suffix
+        if "+" in s:
+            s = s.split("+")[0]
+        if "-" in s and "T" in s:
+            # Be careful: YYYY-MM-DD has dashes, but so does timezone offset
+            # Only remove if it's after the time part
+            parts = s.split("T")
+            if len(parts) == 2:
+                time_part = parts[1]
+                if "-" in time_part:  # timezone offset like 2000-01-23T04:56:07.000-05:00
+                    s = parts[0] + "T" + time_part.split("-")[0]
+        if s.endswith("Z"):
             s = s[:-1]
         
-        # Remove timezone offset (+/-HH:MM) if present
-        if '+' in s:
-            s = s.split('+')[0]
+        # Parse as local datetime (no timezone conversion)
+        # Try full ISO format first
+        try:
+            dt = datetime.datetime.fromisoformat(s)
+        except ValueError:
+            # Fallback: just take date part
+            date_part = s.split("T")[0]
+            dt = datetime.datetime.fromisoformat(date_part)
         
-        # For negative offset, be careful (date has dashes too)
-        # Only remove if after time part (after 'T')
-        if 'T' in s and '-' in s:
-            date_part, time_part = s.split('T', 1)
-            # time_part might have negative offset like "00:40:00-05:00"
-            if '-' in time_part:
-                time_clean = time_part.split('-')[0]
-                s = f"{date_part}T{time_clean}"
-        
-        # Remove milliseconds if present (not needed for date)
-        if '.' in s:
-            s = s.split('.')[0]
-        
-        logging.debug(f"_parse_activity_date_from_payload: cleaned = {s}")
-        
-        # Step 2: Parse as ISO format (NO timezone conversion — treat as local)
-        dt = datetime.datetime.fromisoformat(s)
-        result_date = dt.date()
-        
-        logging.debug(f"_parse_activity_date_from_payload: final result = {result_date} (year={result_date.year}, month={result_date.month}, day={result_date.day})")
-        return result_date
-        
+        return dt.date()
     except Exception as e:
-        logging.error(f"_parse_activity_date_from_payload failed on: {s}, error: {e}")
         raise ValueError(f"cannot parse start_date: {start}") from e
 
 def _normalize_type(raw: Optional[str]) -> str:
@@ -455,41 +434,22 @@ def sync_recent(owner_strava_id: int, db: Session = Depends(get_db)):
                 skipped += 1
                 continue
 
-        return {            "skipped": skipped            "processed_claims": processed,            "created_in_db": created,            "fetched": len(items),            "owner_strava_id": owner_strava_id,            "status": "ok",        }
-    except Exception as e:
-        return _json_error(500, "sync_recent failed", {"owner_strava_id": owner_strava_id}, e)    except Exception as e:        raise he    except HTTPException as he:        }            "skipped": skipped            "processed_claims": processed,            "created_in_db": created,            "fetched": len(items),            "owner_strava_id": owner_strava_id,            "status": "ok",        return {                skipped += 1            else:                processed += 1            if res.get("message") == "Claim created":            res = process_activity_instance(activity, db)# NEW: Debug endpoint to inspect stored activities
-@router.get("/debug/activities")
-def debug_activities(user_id: int = None, db: Session = Depends(get_db)):
-    """
-    Debug endpoint: show all activities with raw dates for inspection.
-    Pass ?user_id=123 to filter by user.
-    """
-    try:
-        query = db.query(Activity)
-        if user_id:
-            query = query.filter(Activity.user_id == user_id)
-        activities = query.all()
-        
-        result = []
-        for act in activities:
-            result.append({
-                "id": act.id,
-                "user_id": act.user_id,
-                "strava_id": act.strava_id,
-                "date_raw": str(act.date) if act.date else None,  # Show raw date
-                "date_day": act.date.day if act.date else None,
-                "date_month": act.date.month if act.date else None,
-                "date_year": act.date.year if act.date else None,
-                "distance_km": float(act.distance_km or 0),
-                "effective_km": act.effective_km,
-                "status": act.status,
-                "is_manual": act.is_manual,
-                "strava_id": act.strava_id
-            })
-        
+            res = process_activity_instance(activity, db)
+            if res.get("message") == "Claim created":
+                processed += 1
+            else:
+                skipped += 1
+
         return {
-            "count": len(result),
-            "activities": sorted(result, key=lambda x: x["date_raw"] or "", reverse=True)
+            "status": "ok",
+            "owner_strava_id": owner_strava_id,
+            "fetched": len(items),
+            "created_in_db": created,
+            "processed_claims": processed,
+            "skipped": skipped
         }
+
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        return {"error": str(e)}
+        return _json_error(500, "sync_recent failed", {"owner_strava_id": owner_strava_id}, e)
