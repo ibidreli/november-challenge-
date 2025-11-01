@@ -108,6 +108,13 @@ def sync_recent_activities_from_strava(user: User, db: Session):
 		logging.info("No user or access_token for sync.")
 		return {"synced": 0, "reason": "no_token"}
 
+	# Refresh token if needed (Strava tokens expire after 6 hours)
+	try:
+		if not refresh_user_token(user, db):
+			logging.warning("Token refresh failed for user %s, proceeding with current token", user.id)
+	except Exception:
+		logging.exception("Error refreshing token for user %s", user.id)
+
 	# compute start = first day of CHALLENGE_MONTH
 	today = datetime.date.today()
 	month = CHALLENGE_MONTH if CHALLENGE_MONTH else ROUTE_CHALLENGE_MONTH
