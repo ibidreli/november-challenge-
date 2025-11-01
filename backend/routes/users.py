@@ -149,11 +149,47 @@ def debug_raw_users(db: Session = Depends(get_db)):
                 "name": u.name,
                 "strava_id": u.strava_id,
                 "total_score": int(u.total_score or 0),
-                "slots": u.slots
+                "slots": u.slots,
+                "has_access_token": bool(u.access_token),
+                "has_refresh_token": bool(u.refresh_token),
             })
         return out
     except Exception as e:
         return {"error": "db_error", "details": str(e)}
+
+
+@router.get("/debug_all_activities")
+def debug_all_activities(db: Session = Depends(get_db)):
+    """
+    Debug endpoint: Show ALL activities in database grouped by user.
+    """
+    try:
+        from models.activity import Activity
+        activities = db.query(Activity).all()
+        
+        # Group by user
+        by_user = {}
+        for a in activities:
+            user_id = a.user_id
+            if user_id not in by_user:
+                by_user[user_id] = []
+            by_user[user_id].append({
+                "id": a.id,
+                "strava_id": a.strava_id,
+                "date": str(a.date) if a.date else None,
+                "distance_km": float(a.distance_km) if a.distance_km else None,
+                "status": a.status,
+                "is_manual": a.is_manual,
+                "effective_km": a.effective_km,
+            })
+        
+        return {
+            "total_activities": len(activities),
+            "activities_by_user": by_user
+        }
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
 
 
 @router.get("/")
