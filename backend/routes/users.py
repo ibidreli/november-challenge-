@@ -136,6 +136,7 @@ def debug_sync_user(user_id: int, db: Session = Depends(get_db)):
 def debug_token_test(user_id: int, db: Session = Depends(get_db)):
     """
     Debug endpoint: Test if the user's access token is valid by calling Strava API directly.
+    Also fetch recent activities to see what Strava has for this athlete.
     Returns athlete info if token is valid, or error if not.
     """
     import requests
@@ -183,6 +184,95 @@ def debug_token_test(user_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         debug_info["token_test_error"] = str(e)
         debug_info["token_test_result"] = "request_failed"
+    
+    # Now fetch recent activities from Strava directly
+    if user.access_token:
+        try:
+            headers = {"Authorization": f"Bearer {user.access_token}"}
+            # Fetch activities after Nov 1, 2025
+            nov_1_2025 = datetime.datetime(2025, 11, 1, 0, 0, 0)
+            since_epoch = int(nov_1_2025.timestamp())
+            
+            params = {
+                "after": since_epoch,
+                "per_page": 50,
+                "page": 1
+            }
+            r = requests.get("https://www.strava.com/api/v3/athlete/activities", headers=headers, params=params, timeout=10)
+            
+            if r.status_code == 200:
+                activities = r.json() or []
+                debug_info["strava_recent_activities_count"] = len(activities)
+                debug_info["strava_recent_activities"] = [
+                    {
+                        "id": a.get("id"),
+                        "name": a.get("name"),
+                        "type": a.get("type"),
+                        "distance_m": a.get("distance"),
+                        "distance_km": (a.get("distance") or 0) / 1000.0,
+                        "start_date_local": a.get("start_date_local"),
+                    }
+                    for a in activities[:10]  # First 10
+                ]
+            else:
+                debug_info["strava_activities_error"] = f"Status {r.status_code}: {r.text[:200]}"
+        except Exception as e:
+            debug_info["strava_activities_error"] = str(e)
+    
+    return debug_info
+
+
+@router.get("/debug_strava_all/{user_id}")
+def debug_strava_all(user_id: int, db: Session = Depends(get_db)):
+    """
+    Debug endpoint: Fetch ALL recent activities from Strava (no time filter).
+    This shows everything Robert has without the 'after' timestamp filter.
+    """
+    import requests
+    
+    user = db.query(User).filter_by(id=user_id).first()
+    if not user:
+        return {"error": "user_not_found", "user_id": user_id}
+    
+    if not user.access_token:
+        return {"error": "no_access_token"}
+    
+    debug_info = {
+        "user_id": user.id,
+        "user_name": user.name,
+        "strava_id": user.strava_id,
+    }
+    
+    try:
+        headers = {"Authorization": f"Bearer {user.access_token}"}
+        # Get ALL recent activities (NO time filter, just most recent 50)
+        params = {
+            "per_page": 50,
+            "page": 1
+        }
+        r = requests.get("https://www.strava.com/api/v3/athlete/activities", headers=headers, params=params, timeout=10)
+        
+        if r.status_code == 200:
+            activities = r.json() or []
+            debug_info["total_activities_returned"] = len(activities)
+            debug_info["activities"] = [
+                {
+                    "strava_id": a.get("id"),
+                    "name": a.get("name"),
+                    "type": a.get("type"),
+                    "distance_km": round((a.get("distance") or 0) / 1000.0, 2),
+                    "start_date_local": a.get("start_date_local"),
+                    "start_date": a.get("start_date"),
+                }
+                for a in activities[:15]  # Show first 15
+            ]
+        else:
+            debug_info["error"] = f"Strava API error: {r.status_code}"
+            debug_info["response"] = r.text[:300]
+    except Exception as e:
+        debug_info["error"] = str(e)
+        import traceback
+        debug_info["traceback"] = traceback.format_exc()
     
     return debug_info
 
