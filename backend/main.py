@@ -10,6 +10,8 @@ import logging
 import traceback
 from fastapi.responses import JSONResponse, HTMLResponse
 from urllib.parse import urlparse
+import asyncio
+from contextlib import asynccontextmanager
 
 
 
@@ -48,7 +50,7 @@ except Exception as e:
 	DATABASE_URL = os.getenv("DATABASE_URL", "")
 	# routers left undefined when DB not available
 
-app = FastAPI(title="November Challenge API")
+app = FastAPI(title="November Challenge API", lifespan=lifespan)
 
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "").strip()
@@ -322,3 +324,21 @@ def debug_config(request: Request):
          "DB_AVAILABLE": DB_AVAILABLE,
          "notes": "If DB_AVAILABLE is false, check /debug/nodb and your Render service logs."
      }
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup/Shutdown logic für Background-Tasks."""
+    # STARTUP
+    logger.info("Starting background sync task...")
+    from tasks.sync_scheduler import background_sync_loop
+    sync_task = asyncio.create_task(background_sync_loop())
+    
+    yield
+    
+    # SHUTDOWN
+    logger.info("Stopping background sync task...")
+    sync_task.cancel()
+    try:
+        await sync_task
+    except asyncio.CancelledError:
+        logger.info("Background sync task stopped")

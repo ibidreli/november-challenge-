@@ -11,7 +11,9 @@ import requests
 import os
 import traceback
 from typing import Optional, List, Tuple, Dict, Any
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # -------------------------------------------------
@@ -215,7 +217,7 @@ def process_activity_instance(activity: Activity, db: Session, simulate_month: i
     taken = {int(c.km) for c in monthly_claims if getattr(c, "km", None) is not None and 1 <= int(c.km)}
 
     assigned = None
-    # NEW: search from candidate down to 1, but also allow going ABOVE 30 if candidate > 30
+    # NEW: search from candidate down to 1 (respects 1-30 range for slot display)
     for k in range(candidate_start, 0, -1):
         if k not in taken:
             assigned = k
@@ -240,7 +242,152 @@ def process_activity_instance(activity: Activity, db: Session, simulate_month: i
 
     db.commit()
     db.refresh(claim)
+    logger.info(f"Activity {activity.id} processed: claimed km={assigned} for user {user.id}")
     return {"message": "Claim created", "km": assigned}
+
+# -------------------------------------------------
+# NEUE FUNKTION: Interner Sync (für Background-Task)
+# -------------------------------------------------
+def sync_recent_internal(owner_strava_id: int, db: Session) -> Dict[str, Any]:
+    """
+    Interne Sync-Logik (wird von Background-Task + Manual-Endpoint verwendet).
+    EXTRA LOGGING für Debugging von fehlenden Aktivitäten.
+    """
+    try:
+        user = db.query(User).filter(User.strava_id == owner_strava_id).first()
+        if not user:
+            logger.warning(f"sync_recent_internal: User not found for strava_id {owner_strava_id}")
+            return {"error": "User not found", "owner_strava_id": owner_strava_id}
+
+        token = getattr(user, "access_token", None)
+        if not token:
+            logger.warning(f"sync_recent_internal: No token for user {user.id} (strava_id {owner_strava_id})")
+            return {"error": "User has no access_token", "owner_strava_id": owner_strava_id}
+
+        first_day, last_day = _month_bounds(CHALLENGE_YEAR, CHALLENGE_MONTH)
+        after_epoch = int(datetime.datetime(first_day.year, first_day.month, first_day.day, 0, 0, 0,
+                                            tzinfo=datetime.timezone.utc).timestamp())
+        before_epoch = int(datetime.datetime(last_day.year, last_day.month, last_day.day, 23, 59, 59,
+                                             tzinfo=datetime.timezone.utc).timestamp())
+
+        params = {"per_page": 50, "page": 1, "after": after_epoch, "before": before_epoch}
+        
+        logger.debug(f"Fetching Strava activities for user {user.id}: after={after_epoch}, before={before_epoch}")
+        r = _strava_get("/athlete/activities", token, params=params)
+
+        if r.status_code == 401 and _can_refresh(user):
+            logger.info(f"Token expired for user {user.id}, refreshing...")
+            new_token = _refresh_token(user)
+            if new_token:
+                db.add(user)
+                db.commit()
+                r = _strava_get("/athlete/activities", new_token, params=params)
+
+        if r.status_code != 200:
+            logger.error(f"Strava fetch failed for user {user.id}: {r.status_code} {r.text}")
+            return {"error": "Strava fetch failed", "code": r.status_code}
+
+        items = r.json() or []
+        logger.info(f"Strava returned {len(items)} activities for user {user.id}")
+        
+        created, processed, skipped = 0, 0, 0
+        skipped_reasons = []
+
+        for idx, it in enumerate(items):
+            try:
+                act_type = it.get("type")
+                if not _is_allowed_run_type(act_type):
+                    logger.debug(f"  [{idx}] Activity {it.get('id')}: Skipped - type '{act_type}' not allowed")
+                    skipped += 1
+                    skipped_reasons.append(f"type={act_type}")
+                    continue
+                
+                try:
+                    act_date = _parse_activity_date_from_payload(it)
+                except Exception as e:
+                    logger.debug(f"  [{idx}] Activity {it.get('id')}: Skipped - date parse error: {e}")
+                    skipped += 1
+                    skipped_reasons.append(f"date_parse_error")
+                    continue
+                
+                if not _in_challenge_window(act_date):
+                    logger.debug(f"  [{idx}] Activity {it.get('id')} ({act_date}): Skipped - outside challenge window")
+                    skipped += 1
+                    skipped_reasons.append(f"outside_window")
+                    continue
+
+                sid = str(it.get("id") or "")
+                if not sid.isdigit():
+                    logger.debug(f"  [{idx}] Activity: Skipped - invalid id '{sid}'")
+                    skipped += 1
+                    skipped_reasons.append(f"invalid_id")
+                    continue
+
+                dist_km = float((it.get("distance", 0) or 0)) / 1000.0
+                activity_name = it.get("name", "N/A")
+
+                existing = db.query(Activity).filter(Activity.strava_id == sid).first()
+                if existing:
+                    if not existing.distance_km:
+                        existing.distance_km = dist_km
+                    if not existing.date:
+                        existing.date = act_date
+                    db.add(existing)
+                    res = process_activity_instance(existing, db)
+                    if res.get("message") == "Claim created":
+                        logger.info(f"  [{idx}] Activity {sid} (existing): CLAIMED km={res.get('km')}")
+                        processed += 1
+                    else:
+                        logger.debug(f"  [{idx}] Activity {sid} (existing): {res}")
+                        skipped += 1
+                        skipped_reasons.append(f"process_result={res.get('message', 'unknown')}")
+                    continue
+
+                logger.info(f"  [{idx}] Activity {sid} '{activity_name}' ({act_date}, {dist_km}km): Creating...")
+                activity = Activity(
+                    user_id=user.id,
+                    strava_id=sid,
+                    date=act_date,
+                    distance_km=dist_km,
+                    status="fetched"
+                )
+                db.add(activity)
+                db.commit()
+                db.refresh(activity)
+                created += 1
+                logger.info(f"  [{idx}] Activity {sid}: Created in DB")
+
+                res = process_activity_instance(activity, db)
+                if res.get("message") == "Claim created":
+                    logger.info(f"  [{idx}] Activity {sid}: CLAIMED km={res.get('km')}")
+                    processed += 1
+                else:
+                    logger.debug(f"  [{idx}] Activity {sid}: {res}")
+                    skipped += 1
+                    skipped_reasons.append(f"process_result={res.get('message', 'unknown')}")
+
+            except Exception as e:
+                logger.error(f"  [{idx}] Exception processing activity: {e}", exc_info=True)
+                db.rollback()
+                skipped += 1
+                skipped_reasons.append(f"exception")
+
+        logger.info(f"Sync complete for user {user.id}: created={created}, processed={processed}, skipped={skipped}")
+        if skipped_reasons:
+            logger.debug(f"Skipped reasons: {skipped_reasons}")
+        
+        return {
+            "status": "ok",
+            "owner_strava_id": owner_strava_id,
+            "fetched": len(items),
+            "created_in_db": created,
+            "processed_claims": processed,
+            "skipped": skipped
+        }
+
+    except Exception as e:
+        logger.error(f"sync_recent_internal failed for strava_id {owner_strava_id}: {e}", exc_info=True)
+        return {"error": "sync_recent_internal failed", "owner_strava_id": owner_strava_id, "exception": str(e)}
 
 # -------------------------------------------------
 # Routes
@@ -351,105 +498,47 @@ def process_by_strava(
 
 @router.post("/sync_recent/{owner_strava_id}")
 def sync_recent(owner_strava_id: int, db: Session = Depends(get_db)):
+    """
+    MANUELLER Sync-Endpoint (für On-Demand Refresh).
+    Frontend kann damit einen manuellen Refresh triggern.
+    """
     try:
-        user = db.query(User).filter(User.strava_id == owner_strava_id).first()
-        if not user:
-            return _json_error(404, "User not found", {"owner_strava_id": owner_strava_id})
-
-        token = getattr(user, "access_token", None)
-        if not token:
-            return _json_error(400, "User has no access_token", {"owner_strava_id": owner_strava_id})
-
-        first_day, last_day = _month_bounds(CHALLENGE_YEAR, CHALLENGE_MONTH)
-        after_epoch = int(datetime.datetime(first_day.year, first_day.month, first_day.day, 0, 0, 0,
-                                            tzinfo=datetime.timezone.utc).timestamp())
-        before_epoch = int(datetime.datetime(last_day.year, last_day.month, last_day.day, 23, 59, 59,
-                                             tzinfo=datetime.timezone.utc).timestamp())
-
-        params = {"per_page": 50, "page": 1, "after": after_epoch, "before": before_epoch}
-        r = _strava_get("/athlete/activities", token, params=params)
-
-        if r.status_code == 401 and _can_refresh(user):
-            new_token = _refresh_token(user)
-            if new_token:
-                db.add(user)
-                db.commit()
-                r = _strava_get("/athlete/activities", new_token, params=params)
-
-        if r.status_code != 200:
-            return _json_error(502, "Strava activities fetch failed",
-                               {"code": r.status_code, "body": r.text, "path": "/athlete/activities"})
-
-        items = r.json() or []
-        created, processed, skipped = 0, 0, 0
-
-        for it in items:
-            if not _is_allowed_run_type(it.get("type")):
-                skipped += 1
-                continue
-            try:
-                act_date = _parse_activity_date_from_payload(it)
-            except Exception:
-                skipped += 1
-                continue
-            if not _in_challenge_window(act_date):
-                skipped += 1
-                continue
-
-            sid = str(it.get("id") or "")
-            if not sid.isdigit():
-                skipped += 1
-                continue
-
-            dist_km = float((it.get("distance", 0) or 0)) / 1000.0
-
-            existing = db.query(Activity).filter(Activity.strava_id == sid).first()
-            if existing:
-                if not existing.distance_km:
-                    existing.distance_km = dist_km
-                if not existing.date:
-                    existing.date = act_date
-                db.add(existing)
-                res = process_activity_instance(existing, db)
-                if res.get("message") == "Claim created":
-                    processed += 1
-                else:
-                    skipped += 1
-                continue
-
-            try:
-                activity = Activity(
-                    user_id=user.id,
-                    strava_id=sid,
-                    date=act_date,
-                    distance_km=dist_km,
-                    status="fetched"
-                )
-                db.add(activity)
-                db.commit()
-                db.refresh(activity)
-                created += 1
-            except Exception:
-                db.rollback()
-                skipped += 1
-                continue
-
-            res = process_activity_instance(activity, db)
-            if res.get("message") == "Claim created":
-                processed += 1
-            else:
-                skipped += 1
-
-        return {
-            "status": "ok",
-            "owner_strava_id": owner_strava_id,
-            "fetched": len(items),
-            "created_in_db": created,
-            "processed_claims": processed,
-            "skipped": skipped
-        }
-
+        from tasks.sync_scheduler import mark_sync_done
+        result = sync_recent_internal(owner_strava_id, db)
+        if "error" not in result:
+            # Markiere als gerade synced (für Auto-Sync Timing)
+            user = db.query(User).filter(User.strava_id == owner_strava_id).first()
+            if user:
+                mark_sync_done(user.id)
+        return result
     except HTTPException as he:
         raise he
     except Exception as e:
+        logger.error(f"sync_recent endpoint failed: {e}", exc_info=True)
         return _json_error(500, "sync_recent failed", {"owner_strava_id": owner_strava_id}, e)
+
+# NEU: Endpoint für Debug-Infos (wie lange bis nächster Auto-Sync)
+@router.get("/sync_status/{owner_strava_id}")
+def get_sync_status(owner_strava_id: int, db: Session = Depends(get_db)):
+    """
+    Zeige Sync-Status für einen User:
+    - Wann war der letzte Sync?
+    - Wann ist der nächste Auto-Sync geplant?
+    """
+    try:
+        from tasks.sync_scheduler import get_seconds_until_next_sync
+        user = db.query(User).filter(User.strava_id == owner_strava_id).first()
+        if not user:
+            return {"error": "User not found"}
+        
+        seconds_until = get_seconds_until_next_sync(user.id)
+        return {
+            "user_id": user.id,
+            "strava_id": owner_strava_id,
+            "seconds_until_next_auto_sync": seconds_until,
+            "minutes_until_next_auto_sync": round(seconds_until / 60, 1),
+            "auto_sync_interval_seconds": 900
+        }
+    except Exception as e:
+        logger.error(f"get_sync_status failed: {e}")
+        return _json_error(500, "Failed to get sync status", exc=e)
