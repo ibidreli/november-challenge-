@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 # Tracking: {user_id: last_sync_timestamp}
 _sync_tracker: Dict[int, float] = {}
-SYNC_INTERVAL_SECONDS = 900  # 15 minutes
+SYNC_INTERVAL_SECONDS = 1800  # 30 minutes (changed from 900)
 
 def get_seconds_until_next_sync(user_id: int) -> int:
     """Berechne Sekunden bis zum nächsten Auto-Sync für einen User."""
@@ -24,7 +24,7 @@ def mark_sync_done(user_id: int) -> None:
     _sync_tracker[user_id] = datetime.datetime.now().timestamp()
 
 def should_sync_user(user_id: int) -> bool:
-    """Prüfe ob User auto-synced werden soll (>15min seit letztem Sync)."""
+    """Prüfe ob User auto-synced werden soll (>30min seit letztem Sync)."""
     last_sync = _sync_tracker.get(user_id, 0)
     elapsed = datetime.datetime.now().timestamp() - last_sync
     return elapsed >= SYNC_INTERVAL_SECONDS
@@ -36,7 +36,7 @@ async def background_sync_loop() -> None:
     """
     import requests
     
-    logger.info("Background sync loop started (interval: 15 min)")
+    logger.info("Background sync loop started (interval: 30 min)")
     
     while True:
         try:
@@ -50,8 +50,7 @@ async def background_sync_loop() -> None:
                         logger.info(f"Auto-syncing user {user.id} (strava_id: {user.strava_id})")
                         
                         # Rufe den bestehenden POST Endpoint auf
-                        # WICHTIG: Verwende localhost oder deine echte Domain
-                        base_url = "https://november-challenge.onrender.com"  # oder deine render-domain
+                        base_url = "https://november-challenge.onrender.com"
                         response = requests.post(
                             f"{base_url}/activities/sync_recent/{user.strava_id}",
                             timeout=60
@@ -63,7 +62,6 @@ async def background_sync_loop() -> None:
                             mark_sync_done(user.id)
                         else:
                             logger.warning(f"Auto-sync user {user.id} failed: {response.status_code}")
-                            # Mark as attempted anyway to avoid hammering
                             mark_sync_done(user.id)
                     
                     except Exception as e:

@@ -38,15 +38,6 @@ def get_current_user(sync: bool = Query(False), request: Request = None, auth_he
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    # optionally sync only this user (useful for frontend to refresh current user's activities)
-    if sync:
-        try:
-            # import locally to avoid circular import at module import time
-            from auth.routes import sync_recent_activities_from_strava
-            sync_result = sync_recent_activities_from_strava(user, db)
-            # ignore/surface result as needed
-        except Exception:
-            pass
     user.ensure_slots()
     return {
         "id": user.id,
@@ -60,8 +51,12 @@ def get_current_user(sync: bool = Query(False), request: Request = None, auth_he
 @router.post("/sync_all")
 def sync_all_users(db: Session = Depends(get_db)):
     """
-    Trigger sync for all users (fetch activities from Strava since CHALLENGE_MONTH start).
-    Frontend can call this on page load to ensure newest activities appear without re-auth.
+    ⚠️ HINWEIS: Dieser Endpoint wird NICHT automatisch vom Frontend aufgerufen!
+    
+    Er existiert nur für manuelle Trigger via Admin-Panel oder externe Scripts.
+    Der Background-Task auf dem Backend syncet automatisch alle 30 Min.
+    
+    Frontend ruft dies NICHT auf Reload auf.
     """
     users = db.query(User).all()
     summary = []
