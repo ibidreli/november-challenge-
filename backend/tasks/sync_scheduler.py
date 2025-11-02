@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 # Tracking: {user_id: last_sync_timestamp}
 _sync_tracker: Dict[int, float] = {}
-SYNC_INTERVAL_SECONDS = 1800  # 30 minutes (changed from 900)
+SYNC_INTERVAL_SECONDS = 1800  # 30 minutes
 
 def get_seconds_until_next_sync(user_id: int) -> int:
     """Berechne Sekunden bis zum nächsten Auto-Sync für einen User."""
@@ -31,10 +31,12 @@ def should_sync_user(user_id: int) -> bool:
 
 async def background_sync_loop() -> None:
     """
-    Background-Task: Syncet alle User regelmäßig via POST Endpoint.
+    Background-Task: Syncet alle User regelmäßig.
+    Ruft sync_recent_internal() DIREKT auf (nicht via HTTP-Request um Timeouts zu vermeiden).
     Läuft kontinuierlich und checkt alle 30 Sekunden ob jemand synced werden muss.
     """
-    import requests
+    # Import hier um zirkuläre Imports zu vermeiden
+    from routes.activities import sync_recent_internal
     
     logger.info("Background sync loop started (interval: 30 min)")
     
@@ -49,20 +51,11 @@ async def background_sync_loop() -> None:
                     try:
                         logger.info(f"Auto-syncing user {user.id} (strava_id: {user.strava_id})")
                         
-                        # Rufe den bestehenden POST Endpoint auf
-                        base_url = "https://november-challenge.onrender.com"
-                        response = requests.post(
-                            f"{base_url}/activities/sync_recent/{user.strava_id}",
-                            timeout=60
-                        )
+                        # ✅ DIREKT aufrufen (kein HTTP-Request!)
+                        result = sync_recent_internal(user.strava_id, db)
                         
-                        if response.status_code == 200:
-                            result = response.json()
-                            logger.info(f"Auto-sync user {user.id} completed: {result}")
-                            mark_sync_done(user.id)
-                        else:
-                            logger.warning(f"Auto-sync user {user.id} failed: {response.status_code}")
-                            mark_sync_done(user.id)
+                        logger.info(f"Auto-sync user {user.id} completed: {result}")
+                        mark_sync_done(user.id)
                     
                     except Exception as e:
                         logger.error(f"Auto-sync failed for user {user.id}: {e}", exc_info=True)
