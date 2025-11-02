@@ -136,7 +136,7 @@ export default function Dashboard({ refreshKey = 0 }) {
   const totalKmAll = leaderboard.reduce((sum, p) => sum + kmFromSlots(p.slots), 0);
 
   return (
-    <div className="simple-dashboard" style={{ padding: 16 }}>
+    <div className="simple-dashboard" style={{ padding: 0 }}>
       <div
         style={{
           display: "flex",
