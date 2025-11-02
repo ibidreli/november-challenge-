@@ -1,7 +1,3 @@
-# --- BACKEND STRUCTURE ---
-# Path: backend/main.py
-
-
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -13,7 +9,40 @@ from urllib.parse import urlparse
 import asyncio
 from contextlib import asynccontextmanager
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
+# --- BACKEND STRUCTURE ---
+# Path: backend/main.py
+
+
+FRONTEND_URL = os.getenv("FRONTEND_URL", "").strip()
+CUSTOM_DOMAIN = os.getenv("CUSTOM_DOMAIN", "").strip()
+DEFAULT_FRONTEND = "https://november-challenge-1.onrender.com"
+
+# NEW: Define lifespan BEFORE FastAPI() initialization
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup/Shutdown logic für Background-Tasks."""
+    # STARTUP
+    logger.info("Starting background sync task...")
+    try:
+        from tasks.sync_scheduler import background_sync_loop
+        sync_task = asyncio.create_task(background_sync_loop())
+    except Exception as e:
+        logger.error("Failed to start background sync task: %s", e)
+        sync_task = None
+    
+    yield
+    
+    # SHUTDOWN
+    if sync_task:
+        logger.info("Stopping background sync task...")
+        sync_task.cancel()
+        try:
+            await sync_task
+        except asyncio.CancelledError:
+            logger.info("Background sync task stopped")
 
 # NEW: attempt to import heavy DB/mods/routers, but don't fail app startup on exceptions
 DB_IMPORT_ERROR = None
@@ -50,14 +79,8 @@ except Exception as e:
 	DATABASE_URL = os.getenv("DATABASE_URL", "")
 	# routers left undefined when DB not available
 
+# NOW create app with lifespan
 app = FastAPI(title="November Challenge API", lifespan=lifespan)
-
-
-FRONTEND_URL = os.getenv("FRONTEND_URL", "").strip()
-CUSTOM_DOMAIN = os.getenv("CUSTOM_DOMAIN", "").strip()
-# Always allow the known deployed frontend origin as a safe default in addition to any explicit env value.
-# This avoids CORS/credential issues when FRONTEND_URL isn't set in the service env.
-DEFAULT_FRONTEND = "https://november-challenge-1.onrender.com"
 
 # Build list of allowed origins
 allow_origins = []
@@ -166,16 +189,9 @@ else:
 			"<!doctype html><html><head><meta charset='utf-8'><title>Auth Callback unavailable</title></head>"
 			"<body style='font-family:Arial,sans-serif;padding:20px'>"
 			"<h2>Auth Callback nicht verfügbar</h2>"
-			"<p>Der OAuth‑Callback ist derzeit nicht registriert, weil beim Start ein Fehler aufgetreten ist.</p>"
-			"<h3>Kurze Traceback‑Vorschau</h3>"
 			"<pre style='background:#f6f6f6;padding:10px;border-radius:4px;white-space:pre-wrap;max-height:420px;overflow:auto;'>"
 			+ trace_short.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;") +
 			"</pre>"
-			"<p>Weitere Schritte:</p>"
-			"<ol>"
-			"<li>Rufe <a href='/debug/nodb'>/debug/nodb</a> auf, um den vollständigen Traceback zu sehen.</li>"
-			"<li>Prüfe die Umgebungsvariablen (insb. <code>DATABASE_URL</code>) und die Server‑Logs.</li>"
-			"</ol>"
 			"</body></html>"
 		)
 		return HTMLResponse(content=html, status_code=503)
@@ -324,21 +340,3 @@ def debug_config(request: Request):
          "DB_AVAILABLE": DB_AVAILABLE,
          "notes": "If DB_AVAILABLE is false, check /debug/nodb and your Render service logs."
      }
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Startup/Shutdown logic für Background-Tasks."""
-    # STARTUP
-    logger.info("Starting background sync task...")
-    from tasks.sync_scheduler import background_sync_loop
-    sync_task = asyncio.create_task(background_sync_loop())
-    
-    yield
-    
-    # SHUTDOWN
-    logger.info("Stopping background sync task...")
-    sync_task.cancel()
-    try:
-        await sync_task
-    except asyncio.CancelledError:
-        logger.info("Background sync task stopped")
