@@ -117,13 +117,36 @@ def _current_month_claims(db: Session, user_id: int) -> List[Claim]:
     ).all()
 
 def _rebuild_user_slots_and_score_from_claims(user: User, claims: List[Claim]) -> None:
-    # FIX: Erstelle Liste von integers, nicht dict
-    taken = {int(c.km) for c in claims if getattr(c, "km", None) is not None}
-    taken = {k for k in taken if 1 <= k <= 30}
-    # Spiegel für Frontend: Liste mit km oder None
-    user.slots = [k if (k in taken) else None for k in range(1, 31)]
-    # Score = Summe belegter Slots
-    user.total_score = sum(taken)
+    """
+    ÜBERARBEITETE LOGIK:
+    - Respektiere bestehende manuelle Einträge in user.slots
+    - Berechne Score als Summe aller belegten Slots (whether from claims or manual)
+    - Nur Claims hinzufügen, wo noch kein Slot gesetzt ist
+    """
+    user.ensure_slots()
+    
+    # Schritt 1: Bestehende Slots kopieren (respektiere manuelle Änderungen!)
+    current_slots = list(user.slots or [None] * 30)
+    
+    # Schritt 2: Welche km sind bereits belegt? (von Hand ODER durch Claims)
+    taken_km = set()
+    for i, slot_value in enumerate(current_slots):
+        if slot_value is not None:
+            km_value = int(slot_value)
+            if 1 <= km_value <= 30:
+                taken_km.add(km_value)
+    
+    # Schritt 3: Claims hinzufügen, nur wo noch nicht belegt
+    for claim in claims:
+        claim_km = int(getattr(claim, "km", 0) or 0)
+        if 1 <= claim_km <= 30 and claim_km not in taken_km:
+            current_slots[claim_km - 1] = claim_km  # Index = km - 1
+            taken_km.add(claim_km)
+    
+    # Schritt 4: Score = Summe aller belegten Slots (nicht nur Claims!)
+    user.slots = current_slots
+    user.total_score = sum(taken_km)
+    
     try:
         flag_modified(user, "slots")
     except Exception:
@@ -177,6 +200,8 @@ def process_activity_instance(activity: Activity, db: Session, simulate_month: i
     """
     Process a single activity instance.
     simulate_month: optional override for testing (defaults to CHALLENGE_MONTH env).
+    
+    WICHTIG: Neue Logik respektiert bestehende Slots!
     """
     if not activity:
         raise ValueError("activity is None")
@@ -208,16 +233,24 @@ def process_activity_instance(activity: Activity, db: Session, simulate_month: i
     if activity.distance_km is None:
         return {"error": "Activity distance missing"}
 
-    # Zielslot: floor(distance_km), begrenzt 1..30 (keine obere Grenze mehr — nur minimum 1)
+    # Zielslot: floor(distance_km), begrenzt auf minimum 1
     floor_km = int(float(activity.distance_km) // 1)
-    # REMOVED 30-km limit: allow any km value >= 1
     candidate_start = max(floor_km, 1)
 
-    monthly_claims = _current_month_claims(db, user.id)
-    taken = {int(c.km) for c in monthly_claims if getattr(c, "km", None) is not None and 1 <= int(c.km)}
+    # WICHTIG: Achte auf BESTEHENDE SLOTS (auch manuelle Änderungen!)
+    user.ensure_slots()
+    current_slots = list(user.slots or [None] * 30)
+    
+    # Welche km sind BEREITS BELEGT (egal ob durch Claim oder manuell)?
+    taken = set()
+    for i, slot_value in enumerate(current_slots):
+        if slot_value is not None:
+            km_val = int(slot_value)
+            if 1 <= km_val <= 30:
+                taken.add(km_val)
 
     assigned = None
-    # NEW: search from candidate down to 1 (respects 1-30 range for slot display)
+    # Suche freien Slot von candidate_start abwärts
     for k in range(candidate_start, 0, -1):
         if k not in taken:
             assigned = k
@@ -234,7 +267,7 @@ def process_activity_instance(activity: Activity, db: Session, simulate_month: i
     activity.effective_km = assigned
     db.add(activity)
 
-    # Slots/Score neu spiegeln
+    # Slots/Score neu spiegeln (respektiert manuelle Änderungen!)
     db.flush()
     monthly_claims = _current_month_claims(db, user.id)
     _rebuild_user_slots_and_score_from_claims(user, monthly_claims)
