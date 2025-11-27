@@ -282,7 +282,8 @@ export default function Dashboard({ refreshKey = 0 }) {
                       padding: 10,
                       borderRadius: 8,
                       border: "1px solid #eee",
-                      background: idx < 3 ? "#fffbeb" : "#fff",
+                      // Nur Rang 1 bekommt die goldene Box
+                      background: (ranks[idx] === 1) ? "#fffbeb" : "#fff",
                     }}
                   >
                     <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
