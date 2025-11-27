@@ -135,6 +135,28 @@ export default function Dashboard({ refreshKey = 0 }) {
   // Calculate total km from all players
   const totalKmAll = leaderboard.reduce((sum, p) => sum + kmFromSlots(p.slots), 0);
 
+  // NEW: compute competition-style ranks (equal scores => equal rank; next rank = position index)
+  const computeRanks = (list) => {
+    const ranks = [];
+    let lastScore = null;
+    let lastRank = 0;
+    for (let i = 0; i < list.length; i++) {
+      // prefer explicit total_score, otherwise fallback to kmFromSlots
+      const score = Number(list[i]?.total_score ?? kmFromSlots(list[i]?.slots) ?? 0);
+      const position = i + 1;
+      if (lastScore !== null && score === lastScore) {
+        ranks.push(lastRank);
+      } else {
+        ranks.push(position);
+        lastRank = position;
+        lastScore = score;
+      }
+    }
+    return ranks;
+  };
+
+  const ranks = computeRanks(leaderboard);
+
   return (
     <div className="simple-dashboard" style={{ padding: 0 }}>
       <div
@@ -295,7 +317,8 @@ export default function Dashboard({ refreshKey = 0 }) {
 
                     <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                       <MiniGrid slots={p.slots} />
-                      <div style={{ fontWeight: 700, fontSize: 16 }}>{idx + 1}</div>
+                      {/* use computed competition rank instead of idx+1 */}
+                      <div style={{ fontWeight: 700, fontSize: 16 }}>{ranks[idx]}</div>
                     </div>
                   </div>
                 ))}
