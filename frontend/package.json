@@ -4,8 +4,12 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "vite",
+    "dev:local": "vite --mode local",
+    "dev:ui": "vite --mode ui",
     "build": "vite build",
-    "preview": "vite preview"
+    "build:ui": "vite build --mode ui",
+    "preview": "vite preview",
+    "preview:ui": "npm run build:ui && vite preview"
   },
   "dependencies": {
     "react": "^18.0.0",

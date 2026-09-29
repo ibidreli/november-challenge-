@@ -6,7 +6,7 @@ import axios from "axios";
 
 axios.defaults.withCredentials = true;
 
-// API-Basis aus URL-Param, sonst aus ENV, und auf HTTPS erzwingen
+// Ohne explizite Konfiguration bleiben API-Anfragen relativ und laufen im Vite-Proxy.
 (function () {
   try {
     const qs =
@@ -14,21 +14,24 @@ axios.defaults.withCredentials = true;
       (window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "");
     const p = new URLSearchParams(qs);
 
-    let base =
+    let base = (
       p.get("backend_base_https") ||
       p.get("backend_base") ||
-      (import.meta.env.VITE_API_BASE_URL ||
-        "https://november-challenge.onrender.com");
+      import.meta.env.VITE_API_BASE_URL ||
+      ""
+    ).trim();
 
-    if (!/^https?:\/\//i.test(base)) base = "https://" + base;
-    base = base.replace(/^http:\/\//i, "https://").replace(/\/$/, "");
+    if (base && !/^https?:\/\//i.test(base) && !base.startsWith("/")) {
+      base = "http://" + base;
+    }
+    base = base.replace(/\/$/, "");
 
     axios.defaults.baseURL = base; // global
-    window.__API_BASE__ = base; // optional fürs Debuggen
-    console.log("API Base URL set to:", base);
+    window.__API_BASE__ = base || window.location.origin; // optional fürs Debuggen
+    console.log("API Base URL set to:", base || "same-origin (Vite proxy)");
   } catch (e) {
     console.error("Error setting API base URL:", e);
-    axios.defaults.baseURL = "https://november-challenge.onrender.com";
+    axios.defaults.baseURL = "";
   }
 })();
 

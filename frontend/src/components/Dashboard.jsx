@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import { previewLeaderboard, previewUser } from "../previewData";
 
 axios.defaults.withCredentials = true;
 
 export default function Dashboard({ refreshKey = 0 }) {
+  const isPreview = import.meta.env.VITE_UI_PREVIEW === "true";
   const [view, setView] = useState("personal"); // "personal" | "public"
   const [user, setUser] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
@@ -12,6 +14,12 @@ export default function Dashboard({ refreshKey = 0 }) {
   const load = async () => {
     setLoading(true);
     try {
+      if (isPreview) {
+        setUser(previewUser);
+        setLeaderboard(previewLeaderboard);
+        return;
+      }
+
       const [u, lb] = await Promise.all([
         axios
           .get("/users/me")

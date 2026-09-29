@@ -5,6 +5,7 @@ import AdminPanel from "./components/AdminPanel";
 import logo from "../logo/Logo.png";
 
 export default function App() {
+  const isPreview = import.meta.env.VITE_UI_PREVIEW === "true";
   const [refreshKey, setRefreshKey] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [currentPage, setCurrentPage] = useState(() => {
@@ -46,7 +47,7 @@ export default function App() {
           </div>
         )}
         {currentPage === "admin" ? (
-          <AdminPanel />
+          <AdminPanel isPreview={isPreview} />
         ) : (
           <Dashboard refreshKey={refreshKey} />
         )}

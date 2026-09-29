@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import "./AdminPanel.css";
+import { previewActivities, previewAdminUsers } from "../previewData";
 
-export default function AdminPanel() {
+export default function AdminPanel({ isPreview = false }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [adminToken, setAdminToken] = useState(localStorage.getItem("adminToken"));
   const [password, setPassword] = useState("");
@@ -22,11 +23,17 @@ export default function AdminPanel() {
   const API_BASE = "";
 
   useEffect(() => {
+    if (isPreview) {
+      setAdminToken("preview-token");
+      setIsLoggedIn(true);
+      setUsers(previewAdminUsers);
+      return;
+    }
     if (adminToken) {
       setIsLoggedIn(true);
       loadUsers();
     }
-  }, [adminToken]);
+  }, [adminToken, isPreview]);
 
   // ===== AUTH =====
   const handleLogin = async (e) => {
@@ -34,6 +41,13 @@ export default function AdminPanel() {
     setError("");
     setLoading(true);
     try {
+      if (isPreview) {
+        setIsLoggedIn(true);
+        setPassword("");
+        setSuccess("Preview mode active");
+        return;
+      }
+
       const response = await axios.post(`${API_BASE}/admin/login`, null, {
         params: { password },
         headers: {
@@ -55,6 +69,11 @@ export default function AdminPanel() {
   };
 
   const handleLogout = async () => {
+    if (isPreview) {
+      setSuccess("Preview mode stays available after logout");
+      return;
+    }
+
     try {
       await axios.post(
         `${API_BASE}/admin/logout`,
@@ -77,6 +96,12 @@ export default function AdminPanel() {
   const loadUsers = async () => {
     setLoading(true);
     try {
+      if (isPreview) {
+        setUsers(previewAdminUsers);
+        setError("");
+        return;
+      }
+
       const response = await axios.get(`${API_BASE}/admin/users`, {
         headers: { "X-Admin-Token": adminToken },
       });
@@ -140,6 +165,11 @@ export default function AdminPanel() {
     setSelectedUser(user);
     setLoading(true);
     try {
+      if (isPreview) {
+        setUserActivities(previewActivities);
+        return;
+      }
+
       const response = await axios.get(`${API_BASE}/admin/users/${user.id}/activities`, {
         headers: { "X-Admin-Token": adminToken },
       });
