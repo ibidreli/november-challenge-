@@ -1,68 +1,70 @@
-# Lokaler Entwicklungsworkflow
+# Entwickeln und prüfen
 
-## 1. UI-Preview ohne Backend
+Die Startbefehle stehen in [README.md](README.md). Python 3.11+ und Node.js 22+ verwenden. Auf macOS/Linux entspricht `.venv/Scripts/python.exe` dem Pfad `.venv/bin/python`; Umgebungsvariablen dort mit `export NAME=value` setzen.
 
-Dieser Modus ist fuer Layout- und CSS-Arbeit gedacht. Er verwendet stabile Beispieldaten und macht keine API-Requests.
+## Drei Arbeitsweisen
+
+| Zweck | Start | Daten |
+| --- | --- | --- |
+| Nur Layout und Bedienung | `cd frontend; npm run dev:ui` | Browser-Beispiele, keine Backend-Anfragen |
+| Echtes Frontend/Backend | Uvicorn und `npm run dev` | Lokales SQLite oder ausdrücklich gesetzte lokale PostgreSQL-URL |
+| PostgreSQL im Container | `docker compose --env-file .env.local up --build db backend`, daneben `npm run dev` | Eigenes Docker-Volume, PostgreSQL 17 |
+
+Die beiden Startbefehle in eigenen Terminals ausführen. Für lokale Entwicklung eine eigene `.env.local` aus `.env.example` anlegen und mit `--env-file .env.local` ausdrücklich auswählen. Der README-Start setzt zusätzlich eine lokale SQLite-URL. So werden bestehende `.env`-Dateien mit Deployment-Zugangsdaten nicht versehentlich verwendet oder überschrieben. Ein bereits im Terminal gesetzter Wert hat Vorrang vor einer Env-Datei. `LOAD_ENV_FILE=1` aktiviert weiterhin den alten optionalen `.env`-Ladeweg; für die beschriebenen lokalen Starts bleibt es bei `0`. Zugangsdaten und lokale Datenbanken gehören nicht in Git. Der vorhandene lokale `backend/dev.db` wird nicht gelöscht.
+
+## Wo ändere ich etwas?
+
+| Änderung | Datei |
+| --- | --- |
+| Farben, Abstände, mobile Darstellung | `frontend/src/index.css` |
+| Logo, auffällige Anmeldung, angemeldeter Name | `frontend/src/App.jsx` |
+| Persönliche Übersicht und Wochenhinweis | `frontend/src/components/Dashboard.jsx` |
+| Nummerierte Feldchen | `frontend/src/components/ChallengeProgress.jsx` |
+| Kompakte Rangliste | `frontend/src/components/Leaderboard.jsx` |
+| Gemeinsame Kilometerkurve | `frontend/src/components/ChallengeStats.jsx` |
+| Läufergruppen und Formular | `frontend/src/components/Groups.jsx` |
+| Interaktive Karte | `frontend/src/components/StartMap.jsx` |
+| Admin-Oberfläche | `frontend/src/components/AdminPanel.jsx` |
+| Beispieldaten | `frontend/src/previewData.js` |
+| Wertung für alle Importwege | `backend/services/challenge.py` |
+| Strava-Import und Token-Erneuerung | `backend/services/strava.py` |
+| Datenbankänderungen | `backend/models/` und `backend/migrations.py` |
+
+Die Abschlussdistanz und ausgeloste Distanzen werden über `/admin` geändert, ohne Code oder Deployment. `CHALLENGE_YEAR` bestimmt die aktive Edition; November und die vier Zeiträume sind bewusst festgelegt.
+
+## Tests
+
+API und Wertung, mit automatisch isolierter temporärer SQLite-Datenbank:
 
 ```powershell
-Set-Location frontend
-npm run dev:ui
+.venv\Scripts\python.exe -m unittest discover -s backend/tests -v
 ```
 
-Danach `http://localhost:5173` im Browser oeffnen. Aenderungen an React- und CSS-Dateien werden per Vite-HMR direkt sichtbar.
-
-Die Admin-Ansicht ist unter `http://localhost:5173/admin` erreichbar. Sie startet im Preview-Modus automatisch angemeldet und verwendet ebenfalls lokale Beispieldaten.
-
-## 2. Lokaler Full-Stack
-
-Die Datenbank und das Backend koennen mit Docker gestartet werden:
+Mit einer **wegwerfbaren** PostgreSQL-Datenbank (der Test leert ihre Anwendungstabellen):
 
 ```powershell
-docker compose up db backend
+docker run --detach --name november-challenge-test-pg --env POSTGRES_PASSWORD=local-test-only --env POSTGRES_DB=challenge_test --publish 127.0.0.1:55432:5432 postgres:17-alpine
+$env:TEST_DATABASE_URL="postgresql://postgres:local-test-only@localhost:55432/challenge_test"
+.venv\Scripts\python.exe -m unittest discover -s backend/tests -v
+Remove-Item Env:TEST_DATABASE_URL
 ```
 
-In einem zweiten Terminal wird das Frontend gestartet:
+Niemals eine produktive URL als `TEST_DATABASE_URL` setzen. Der Name muss zusätzlich `test` enthalten. Nach den Tests den selbst erstellten Testcontainer stoppen/entfernen.
+
+Browsertests mit Desktop- und Handy-Grösse, Kartenbedienung sowie echtem Frontend/Backend:
 
 ```powershell
-Set-Location frontend
-npm run dev:local
-```
-
-Das Frontend nutzt standardmaessig relative API-Requests. Vite leitet `/auth`, `/users`, `/activities` und `/admin` an `http://localhost:8000` weiter.
-
-Pruefen:
-
-- API: `http://localhost:8000/healthz`
-- Frontend: `http://localhost:5173`
-- Diagnose bei fehlgeschlagenem Backend-Start: `http://localhost:8000/debug/nodb`
-
-Strava-OAuth ist fuer diesen Workflow optional. Ohne lokale Strava-Konfiguration bleiben Login und Synchronisation deaktiviert, die UI und die lokalen Datenbankrouten koennen trotzdem entwickelt werden.
-
-## 3. Explizite externe API
-
-Eine externe API wird nur noch bewusst aktiviert. In PowerShell:
-
-```powershell
-$env:VITE_API_BASE_URL = "https://november-challenge.onrender.com"
-npm run dev
-```
-
-Alternativ kann eine API-Basis einmalig ueber `?backend_base=https://...` gesetzt werden. Ohne diese Konfiguration verwendet das Frontend immer den lokalen Vite-Proxy.
-
-## Nuetzliche Befehle
-
-```powershell
-Set-Location frontend
+cd frontend
+npx playwright install chromium
+npm test
 npm run build
-npm run preview
-npm run preview:ui
+npm run build:ui
 ```
 
-`npm run preview` zeigt den zuletzt gebauten Produktions-Build. `npm run preview:ui` baut zuerst mit dem UI-Modus und zeigt danach den UI-Preview-Build mit Beispieldaten.
+`npm test` startet selbst drei lokale Dienste auf 5178, 5179 und 8021; diese Ports müssen frei sein. Die Python-Umgebung muss wie im README eingerichtet sein. Alternativer Interpreter: Umgebungsvariable `PYTHON`. Die Integration verwendet eine temporäre Datenbank und ausschliesslich lokale Test-Sitzungen. Sie verbindet kein echtes Strava-Konto. Screenshots landen in `output/verification/`, Fehlerdetails in `frontend/test-results/`.
 
-## Troubleshooting
+## Kleine Änderungen schnell beurteilen
 
-- `ECONNREFUSED localhost:8000`: Backend oder Docker-Service laeuft nicht.
-- UI bleibt bei alten Daten: Browser hart neu laden oder pruefen, ob versehentlich `dev:ui` aktiv ist.
-- Falsche API sichtbar: Browser-Konsole auf `API Base URL set to ...` pruefen. Im lokalen Modus muss dort `same-origin (Vite proxy)` stehen.
-- Port 5173 belegt: Prozess beenden; der Vite-Server verwendet absichtlich `strictPort`, damit nicht unbemerkt eine andere URL entsteht.
+Mit `dev:ui` entwickeln: Vite aktualisiert die Ansicht automatisch. Bei einer Wertungsänderung die API-Tests ausführen; bei Formularen oder Login zusätzlich `npm test`. Für Auslosungen mit echten lokalen Daten: `/admin` → Challenge → Entwurf speichern → öffentliche Übersicht prüfen → Veröffentlichen. Auslosungen vor dem 1.11. können vorbereitet werden; gewertet wird erst ab dem tatsächlichen Lauftag.
+
+Die Karte verwendet Leaflet und OpenStreetMap mit sichtbarer Quellenangabe. Ein anderer Kachelanbieter lässt sich mit `VITE_MAP_TILE_URL` und `VITE_MAP_ATTRIBUTION` vor dem Frontend-Build konfigurieren. Für umfangreichere Nutzung die [OSM-Nutzungsbedingungen](https://operations.osmfoundation.org/policies/tiles/) beachten.

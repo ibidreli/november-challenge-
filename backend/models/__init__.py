@@ -2,5 +2,6 @@
 from . import user
 from . import activity
 from . import claim
+from . import challenge, session, community
 
 __all__ = ["user", "activity", "claim"]

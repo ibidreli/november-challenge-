@@ -1,478 +1,569 @@
-import React, { useState, useEffect } from "react";
-import axios from "axios";
-import "./AdminPanel.css";
-import { previewActivities, previewAdminUsers } from "../previewData";
+import React, { useEffect, useState } from "react";
+import { api, errorText, isPreview } from "../api";
+import { localInput, runDate } from "../time";
 
-export default function AdminPanel({ isPreview = false }) {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [adminToken, setAdminToken] = useState(localStorage.getItem("adminToken"));
-  const [password, setPassword] = useState("");
-  const [activeTab, setActiveTab] = useState("users"); // "users" | "activities"
-  const [users, setUsers] = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [userActivities, setUserActivities] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+function DrawEditor({ period, onSave, busy, finale }) {
+  const [value, setValue] = useState(period.draft_distances.join(", "));
+  useEffect(
+    () => setValue(period.draft_distances.join(", ")),
+    [period.draft_distances],
+  );
+  function save(publish) {
+    const distances = value
+      .trim()
+      .split(/[\s,;]+/)
+      .filter(Boolean)
+      .map(Number);
+    onSave(period.number, distances, publish);
+  }
+  return (
+    <article className="draw-card">
+      <div className="section-heading">
+        <h3>Woche {period.number}</h3>
+        <span className={`badge${period.published ? "" : " neutral"}`}>
+          {period.published ? "Veröffentlicht" : "Entwurf"}
+        </span>
+      </div>
+      <p>
+        {new Date(period.starts_on + "T12:00").toLocaleDateString("de-CH")} –{" "}
+        {new Date(period.ends_on + "T12:00").toLocaleDateString("de-CH")}
+      </p>
+      <p className="muted">
+        Auslosung:{" "}
+        {new Date(period.draw_on + "T12:00").toLocaleDateString("de-CH")} ·{" "}
+        {period.capacity} Distanzen
+      </p>
+      <label>
+        Ausgeloste Distanzen in km
+        <input
+          disabled={!period.editable || busy}
+          value={value}
+          placeholder={
+            period.capacity === 8
+              ? "5, 6, 9, 14, 19, 24, 27, 29"
+              : "7 Distanzen, mit Kommas getrennt"
+          }
+          onChange={(e) => setValue(e.target.value)}
+        />
+      </label>
+      <p className="muted">
+        Genau {period.capacity} verschiedene Zahlen von 1–30; {finale} km
+        bleiben für den Abschluss reserviert.
+      </p>
+      {period.editable ? (
+        <div className="form-actions">
+          <button className="btn" disabled={busy} onClick={() => save(false)}>
+            Entwurf speichern
+          </button>
+          <button
+            className="btn primary"
+            disabled={busy}
+            onClick={() => save(true)}
+          >
+            Veröffentlichen
+          </button>
+        </div>
+      ) : (
+        <p className="muted">Seit Beginn des Zeitraums gesperrt.</p>
+      )}
+    </article>
+  );
+}
 
-  // Form states
-  const [newUserName, setNewUserName] = useState("");
-  const [newActivityDate, setNewActivityDate] = useState("");
-  const [newActivityDistance, setNewActivityDistance] = useState("");
-
-  const API_BASE = "";
-
+export default function AdminPanel() {
+  const [token, setToken] = useState(localStorage.getItem("nc_admin") || ""),
+    [password, setPassword] = useState("");
+  const [tab, setTab] = useState("challenge"),
+    [data, setData] = useState(null),
+    [error, setError] = useState(""),
+    [notice, setNotice] = useState(""),
+    [busy, setBusy] = useState(false);
+  const [finale, setFinale] = useState(15),
+    [newName, setNewName] = useState("");
+  const [activity, setActivity] = useState({
+    user_id: "",
+    date: localInput(Date.now()).slice(0, 10),
+    distance_km: "",
+  });
+  async function load() {
+    const [config, users, activities, groups] = await Promise.all(
+      [
+        "/admin/challenge",
+        "/admin/users",
+        "/admin/activities",
+        "/admin/community",
+      ].map((path) => api(path, { admin: true })),
+    );
+    setData({ config, users, activities, groups });
+    setFinale(config.finale_km);
+  }
+  function failure(e) {
+    setError(errorText(e));
+    if (e.response?.status === 401) {
+      localStorage.removeItem("nc_admin");
+      setToken("");
+    }
+  }
   useEffect(() => {
-    if (isPreview) {
-      setAdminToken("preview-token");
-      setIsLoggedIn(true);
-      setUsers(previewAdminUsers);
-      return;
-    }
-    if (adminToken) {
-      setIsLoggedIn(true);
-      loadUsers();
-    }
-  }, [adminToken, isPreview]);
-
-  // ===== AUTH =====
-  const handleLogin = async (e) => {
+    if (token) load().catch(failure);
+  }, [token]);
+  async function login(e) {
     e.preventDefault();
+    setBusy(true);
     setError("");
-    setLoading(true);
     try {
-      if (isPreview) {
-        setIsLoggedIn(true);
-        setPassword("");
-        setSuccess("Preview mode active");
-        return;
-      }
-
-      const response = await axios.post(`${API_BASE}/admin/login`, null, {
-        params: { password },
-        headers: {
-          "X-Admin-Token": adminToken || "",
-        },
+      const result = await api("/admin/login", {
+        method: "POST",
+        body: { password },
       });
-      const token = response.data.token;
-      setAdminToken(token);
-      localStorage.setItem("adminToken", token);
-      setIsLoggedIn(true);
+      localStorage.setItem("nc_admin", result.token);
+      setToken(result.token);
       setPassword("");
-      setSuccess("Logged in successfully!");
-      loadUsers();
-    } catch (err) {
-      setError(err.response?.data?.detail || "Login failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLogout = async () => {
-    if (isPreview) {
-      setSuccess("Preview mode stays available after logout");
-      return;
-    }
-
-    try {
-      await axios.post(
-        `${API_BASE}/admin/logout`,
-        {},
-        {
-          headers: { "X-Admin-Token": adminToken },
-        }
-      );
     } catch (e) {
-      console.error("Logout error:", e);
-    }
-    setAdminToken(null);
-    setIsLoggedIn(false);
-    localStorage.removeItem("adminToken");
-    setSelectedUser(null);
-    setUserActivities([]);
-  };
-
-  // ===== USER MANAGEMENT =====
-  const loadUsers = async () => {
-    setLoading(true);
-    try {
-      if (isPreview) {
-        setUsers(previewAdminUsers);
-        setError("");
-        return;
-      }
-
-      const response = await axios.get(`${API_BASE}/admin/users`, {
-        headers: { "X-Admin-Token": adminToken },
-      });
-      setUsers(response.data);
-      setError("");
-    } catch (err) {
-      setError("Failed to load users");
-      console.error(err);
+      failure(e);
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
-  };
-
-  const handleAddUser = async (e) => {
-    e.preventDefault();
-    if (!newUserName.trim()) {
-      setError("Name is required");
-      return;
-    }
-    setLoading(true);
+  }
+  async function mutate(path, method, body, message) {
+    setBusy(true);
+    setError("");
+    setNotice("");
     try {
-      await axios.post(
-        `${API_BASE}/admin/users`,
-        null,
-        {
-          params: { name: newUserName },
-          headers: { "X-Admin-Token": adminToken },
-        }
-      );
-      setSuccess("User created successfully!");
-      setNewUserName("");
-      loadUsers();
-    } catch (err) {
-      setError(err.response?.data?.detail || "Failed to create user");
+      await api(path, { method, body, admin: true });
+      await load();
+      setNotice(message || "Gespeichert.");
+    } catch (e) {
+      failure(e);
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
-  };
-
-  const handleDeleteUser = async (userId) => {
-    if (!window.confirm("Delete this user and all their data?")) return;
-    setLoading(true);
+  }
+  async function logout() {
     try {
-      await axios.delete(`${API_BASE}/admin/users/${userId}`, {
-        headers: { "X-Admin-Token": adminToken },
-      });
-      setSuccess("User deleted!");
-      loadUsers();
-      if (selectedUser?.id === userId) {
-        setSelectedUser(null);
-        setUserActivities([]);
-      }
-    } catch (err) {
-      setError("Failed to delete user");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSelectUser = async (user) => {
-    setSelectedUser(user);
-    setLoading(true);
-    try {
-      if (isPreview) {
-        setUserActivities(previewActivities);
-        return;
-      }
-
-      const response = await axios.get(`${API_BASE}/admin/users/${user.id}/activities`, {
-        headers: { "X-Admin-Token": adminToken },
-      });
-      setUserActivities(response.data);
-    } catch (err) {
-      setError("Failed to load activities");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ===== ACTIVITY MANAGEMENT =====
-  const handleAddActivity = async (e) => {
-    e.preventDefault();
-    if (!selectedUser) {
-      setError("Select a user first");
-      return;
-    }
-    if (!newActivityDate || !newActivityDistance) {
-      setError("Date and distance are required");
-      return;
-    }
-    setLoading(true);
-    try {
-      await axios.post(
-        `${API_BASE}/admin/users/${selectedUser.id}/activities`,
-        null,
-        {
-          params: {
-            date: newActivityDate,
-            distance_km: parseFloat(newActivityDistance),
-          },
-          headers: { "X-Admin-Token": adminToken },
-        }
-      );
-      setSuccess("Activity created!");
-      setNewActivityDate("");
-      setNewActivityDistance("");
-      handleSelectUser(selectedUser); // Reload activities
-    } catch (err) {
-      setError(err.response?.data?.detail || "Failed to create activity");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteActivity = async (activityId) => {
-    if (!window.confirm("Delete this activity?")) return;
-    if (!selectedUser) return;
-    setLoading(true);
-    try {
-      await axios.delete(
-        `${API_BASE}/admin/users/${selectedUser.id}/activities/${activityId}`,
-        {
-          headers: { "X-Admin-Token": adminToken },
-        }
-      );
-      setSuccess("Activity deleted!");
-      handleSelectUser(selectedUser); // Reload activities
-    } catch (err) {
-      setError("Failed to delete activity");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResetSlots = async (userId) => {
-    if (!window.confirm("Reset all slots and score for this user?")) return;
-    setLoading(true);
-    try {
-      await axios.post(
-        `${API_BASE}/admin/users/${userId}/reset-slots`,
-        {},
-        {
-          headers: { "X-Admin-Token": adminToken },
-        }
-      );
-      setSuccess("Slots reset!");
-      loadUsers();
-      if (selectedUser?.id === userId) {
-        handleSelectUser(selectedUser);
-      }
-    } catch (err) {
-      setError("Failed to reset slots");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ===== RENDER =====
-  if (!isLoggedIn) {
-    return (
-      <div className="admin-login-container">
-        <div className="admin-login-box">
-          <h1>Admin Panel</h1>
-          <form onSubmit={handleLogin}>
+      await api("/admin/logout", { method: "POST", admin: true });
+    } catch {}
+    localStorage.removeItem("nc_admin");
+    setToken("");
+    setData(null);
+  }
+  const used = new Set([
+    data?.config.finale_km,
+    ...(data?.config.periods.flatMap((p) => p.draft_distances) || []),
+  ]);
+  const remaining = Array.from({ length: 30 }, (_, i) => i + 1).filter(
+    (km) => !used.has(km),
+  );
+  return (
+    <div className="admin-panel">
+      <div className="section-heading">
+        <div>
+          <span className="eyebrow">Organisation</span>
+          <h1>Admin</h1>
+        </div>
+        {token && (
+          <button className="btn small" onClick={logout}>
+            Admin abmelden
+          </button>
+        )}
+      </div>
+      {error && (
+        <p role="alert" className="notice error">
+          {error}
+        </p>
+      )}
+      {notice && (
+        <p role="status" className="notice success">
+          {notice}
+        </p>
+      )}
+      {!token ? (
+        <form onSubmit={login} className="admin-login">
+          <p>
+            Hier verwaltest du Auslosungen, Abschlussdistanz und manuelle
+            Korrekturen.
+          </p>
+          <label>
+            Admin-Passwort
             <input
               type="password"
-              placeholder="Admin Password"
+              required
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              disabled={loading}
             />
-            <button type="submit" disabled={loading}>
-              {loading ? "Logging in..." : "Login"}
-            </button>
-          </form>
-          {error && <p className="error-message">{error}</p>}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="admin-container">
-      <div className="admin-header">
-        <h1>Admin Panel</h1>
-        <button onClick={handleLogout} className="logout-btn">
-          Logout
-        </button>
-      </div>
-
-      {error && <div className="admin-error">{error}</div>}
-      {success && <div className="admin-success">{success}</div>}
-
-      <div className="admin-tabs">
-        <button
-          className={`tab-btn ${activeTab === "users" ? "active" : ""}`}
-          onClick={() => setActiveTab("users")}
-        >
-          Users
-        </button>
-        <button
-          className={`tab-btn ${activeTab === "activities" ? "active" : ""}`}
-          onClick={() => setActiveTab("activities")}
-        >
-          Activities
-        </button>
-      </div>
-
-      {/* USERS TAB */}
-      {activeTab === "users" && (
-        <div className="admin-section">
-          <h2>Manage Players</h2>
-
-          <div className="add-user-form">
-            <h3>Add New Player</h3>
-            <form onSubmit={handleAddUser}>
-              <input
-                type="text"
-                placeholder="Player Name"
-                value={newUserName}
-                onChange={(e) => setNewUserName(e.target.value)}
-                disabled={loading}
-              />
-              <button type="submit" disabled={loading}>
-                {loading ? "Adding..." : "Add Player"}
+          </label>
+          <button disabled={busy} className="btn primary">
+            {busy ? "Anmelden …" : "Anmelden"}
+          </button>
+        </form>
+      ) : (
+        <>
+          <nav className="tabs admin-tabs" aria-label="Admin-Bereiche">
+            {[
+              ["challenge", "Challenge"],
+              ["users", "Teilnehmer"],
+              ["activities", "Aktivitäten"],
+              ["groups", "Läufergruppen"],
+            ].map(([key, title]) => (
+              <button
+                key={key}
+                className={tab === key ? "active" : ""}
+                onClick={() => setTab(key)}
+              >
+                {title}
               </button>
-            </form>
-          </div>
-
-          <div className="users-list">
-            <h3>Existing Players ({users.length})</h3>
-            {users.length === 0 ? (
-              <p>No players found</p>
-            ) : (
-              <div className="users-grid">
-                {users.map((user) => (
-                  <div key={user.id} className="user-card">
-                    <h4>{user.name}</h4>
-                    <p>Score: {user.total_score}</p>
-                    <p>Total KM: {user.km_total || 0}</p>
-                    <div className="user-actions">
-                      <button
-                        className="edit-btn"
-                        onClick={() => handleSelectUser(user)}
-                      >
-                        Edit Activities
-                      </button>
-                      <button
-                        className="reset-btn"
-                        onClick={() => handleResetSlots(user.id)}
-                      >
-                        Reset
-                      </button>
-                      <button
-                        className="delete-btn"
-                        onClick={() => handleDeleteUser(user.id)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ACTIVITIES TAB */}
-      {activeTab === "activities" && (
-        <div className="admin-section">
-          <h2>Manage Activities</h2>
-
-          {selectedUser ? (
+            ))}
+          </nav>
+          {!data ? (
+            <p className="empty-state">Administration wird geladen …</p>
+          ) : tab === "challenge" ? (
             <>
-              <div className="selected-user-info">
-                <h3>Player: {selectedUser.name}</h3>
-                <button
-                  className="change-user-btn"
-                  onClick={() => {
-                    setSelectedUser(null);
-                    setUserActivities([]);
-                  }}
-                >
-                  Change Player
-                </button>
-              </div>
-
-              <div className="add-activity-form">
-                <h4>Add Activity</h4>
-                <form onSubmit={handleAddActivity}>
-                  <input
-                    type="date"
-                    value={newActivityDate}
-                    onChange={(e) => setNewActivityDate(e.target.value)}
-                    disabled={loading}
-                  />
+              <h2>Challenge {data.config.year}</h2>
+              <p>
+                Trage die Ergebnisse eurer Auslosung ein. Entwürfe sieht nur der
+                Admin; mit «Veröffentlichen» erscheinen die Distanzen für alle.
+                Nach Beginn einer veröffentlichten Woche ist diese gesperrt.
+              </p>
+              <form
+                className="finale-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  mutate(
+                    "/admin/challenge/finale",
+                    "PUT",
+                    { km: Number(finale) },
+                    "Abschlussdistanz gespeichert.",
+                  );
+                }}
+              >
+                <label>
+                  Abschlusslauf am 30.11. · Distanz in km
                   <input
                     type="number"
-                    placeholder="Distance (km)"
-                    step="0.1"
-                    min="0"
-                    value={newActivityDistance}
-                    onChange={(e) => setNewActivityDistance(e.target.value)}
-                    disabled={loading}
+                    min="1"
+                    max="30"
+                    step="1"
+                    required
+                    value={finale}
+                    onChange={(e) => setFinale(e.target.value)}
                   />
-                  <button type="submit" disabled={loading}>
-                    {loading ? "Adding..." : "Add Activity"}
-                  </button>
-                </form>
+                </label>
+                <button className="btn" disabled={busy}>
+                  Abschlussdistanz speichern
+                </button>
+              </form>
+              <div className="pot">
+                <strong>Noch im Topf: {remaining.length} Distanzen</strong>
+                <p>
+                  {remaining.length
+                    ? remaining.map((km) => `${km} km`).join(" · ")
+                    : "Alle Distanzen sind verteilt."}
+                </p>
+                <small>
+                  Gespeicherte Entwürfe und die Abschlussdistanz sind bereits
+                  reserviert.
+                </small>
               </div>
-
-              <div className="activities-list">
-                <h4>Activities ({userActivities.length})</h4>
-                {userActivities.length === 0 ? (
-                  <p>No activities</p>
-                ) : (
-                  <table className="activities-table">
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Distance (km)</th>
-                        <th>Effective KM</th>
-                        <th>Type</th>
-                        <th>Status</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {userActivities.map((activity) => (
-                        <tr key={activity.id}>
-                          <td>{activity.date}</td>
-                          <td>{activity.distance_km.toFixed(2)}</td>
-                          <td>{activity.effective_km || "-"}</td>
-                          <td>{activity.is_manual ? "Manual" : "Strava"}</td>
-                          <td>{activity.status}</td>
-                          <td>
-                            {activity.is_manual && (
-                              <button
-                                className="delete-activity-btn"
-                                onClick={() => handleDeleteActivity(activity.id)}
-                              >
-                                Delete
-                              </button>
-                            )}
-                            {!activity.is_manual && <span>Read-only</span>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="select-user-prompt">
-              <p>Select a player to manage their activities</p>
-              <div className="users-list-for-activities">
-                {users.map((user) => (
-                  <button
-                    key={user.id}
-                    className="user-select-btn"
-                    onClick={() => handleSelectUser(user)}
-                  >
-                    {user.name}
-                  </button>
+              <div className="draw-grid">
+                {data.config.periods.map((p) => (
+                  <DrawEditor
+                    key={p.number}
+                    period={p}
+                    finale={data.config.finale_km}
+                    busy={busy}
+                    onSave={(n, distances, publish) =>
+                      mutate(
+                        `/admin/challenge/periods/${n}${publish ? "/publish" : ""}`,
+                        publish ? "POST" : "PUT",
+                        { distances },
+                        publish
+                          ? "Auslosung veröffentlicht und vorhandene Läufe neu gewertet."
+                          : "Entwurf gespeichert; öffentlich noch nicht sichtbar.",
+                      )
+                    }
+                  />
                 ))}
               </div>
-            </div>
+            </>
+          ) : tab === "users" ? (
+            <>
+              <h2>Teilnehmer verwalten</h2>
+              <form
+                className="inline-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  mutate(
+                    "/admin/users",
+                    "POST",
+                    { name: newName },
+                    "Teilnehmer hinzugefügt.",
+                  );
+                  setNewName("");
+                }}
+              >
+                <label>
+                  Teilnehmer ohne Strava hinzufügen
+                  <input
+                    required
+                    maxLength="100"
+                    placeholder="Vorname Nachname"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                  />
+                </label>
+                <button className="btn primary" disabled={busy}>
+                  Hinzufügen
+                </button>
+              </form>
+              <div className="admin-list">
+                {data.users.map((u) => (
+                  <article key={u.id}>
+                    <div>
+                      <strong>{u.name}</strong>
+                      <span>
+                        {u.total_score} km · {u.completed_count}/30 ·{" "}
+                        {u.strava_id ? "Strava verbunden" : "Manuell"}
+                      </span>
+                    </div>
+                    <div className="actions">
+                      <button
+                        className="btn small"
+                        onClick={() => {
+                          const name = window.prompt("Anzeigename", u.name);
+                          if (name?.trim())
+                            mutate(`/admin/users/${u.id}`, "PUT", { name });
+                        }}
+                      >
+                        Name ändern
+                      </button>
+                      <button
+                        className="text-button danger"
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `${u.name} und alle zugehörigen Aktivitäten und Resultate dauerhaft löschen?`,
+                            )
+                          )
+                            mutate(`/admin/users/${u.id}`, "DELETE");
+                        }}
+                      >
+                        Löschen
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </>
+          ) : tab === "activities" ? (
+            <>
+              <div className="section-heading">
+                <h2>Aktivitäten und Korrekturen</h2>
+                <button
+                  className="btn small"
+                  disabled={busy}
+                  onClick={() =>
+                    mutate(
+                      "/admin/sync",
+                      "POST",
+                      undefined,
+                      "Strava-Synchronisation im Hintergrund gestartet. Ergebnisse erscheinen nach dem Neuladen.",
+                    )
+                  }
+                >
+                  Strava abrufen
+                </button>
+              </div>
+              <p className="notice">
+                Eine manuelle Tageskorrektur ersetzt die Strava-Wertung dieses
+                Tages. Beim Löschen der Korrektur zählt wieder der längste
+                Strava-Lauf. Die Wochenwertung wird sofort neu berechnet.
+              </p>
+              <form
+                className="form-grid activity-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  mutate(
+                    "/admin/activities",
+                    "POST",
+                    {
+                      user_id: Number(activity.user_id),
+                      date: activity.date,
+                      distance_km: Number(activity.distance_km),
+                    },
+                    "Tageskorrektur gespeichert und Wertung aktualisiert.",
+                  );
+                }}
+              >
+                <label>
+                  Teilnehmer
+                  <select
+                    required
+                    value={activity.user_id}
+                    onChange={(e) =>
+                      setActivity({ ...activity, user_id: e.target.value })
+                    }
+                  >
+                    <option value="">Bitte wählen</option>
+                    {data.users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Laufdatum
+                  <input
+                    required
+                    type="date"
+                    max={
+                      isPreview
+                        ? undefined
+                        : localInput(Date.now()).slice(0, 10)
+                    }
+                    value={activity.date}
+                    onChange={(e) =>
+                      setActivity({ ...activity, date: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Tatsächlich gelaufene km
+                  <input
+                    required
+                    type="number"
+                    min="0.001"
+                    max="300"
+                    step="0.001"
+                    value={activity.distance_km}
+                    onChange={(e) =>
+                      setActivity({ ...activity, distance_km: e.target.value })
+                    }
+                  />
+                </label>
+                <button className="btn primary" disabled={busy}>
+                  Korrektur speichern
+                </button>
+              </form>
+              <div className="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Teilnehmer</th>
+                      <th>Datum</th>
+                      <th>Gelaufen</th>
+                      <th>Gewertet</th>
+                      <th>Status</th>
+                      <th>Aktion</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.activities.map((a) => (
+                      <tr key={a.id}>
+                        <td>
+                          {data.users.find((u) => u.id === a.user_id)?.name ||
+                            a.user_id}
+                        </td>
+                        <td>{a.date}</td>
+                        <td>{a.distance_km} km</td>
+                        <td>{a.effective_km || 0} km</td>
+                        <td>
+                          {a.is_manual ? "Manuell · " : "Strava · "}
+                          {{
+                            claimed: "gewertet",
+                            too_short: "zu kurz",
+                            daily_not_selected: "anderer Tageslauf zählt",
+                            waiting_draw: "wartet auf Auslosung",
+                            period_complete: "Woche erledigt",
+                            deleted: "in Strava gelöscht",
+                            admin_excluded: "ausgeschlossen",
+                            not_run: "kein Lauf",
+                            pending: "offen",
+                          }[a.status] || a.status}
+                        </td>
+                        <td>
+                          {a.status === "admin_excluded" ? (
+                            <button
+                              className="text-button"
+                              disabled={busy}
+                              onClick={() =>
+                                mutate(
+                                  `/admin/activities/${a.id}/restore`,
+                                  "POST",
+                                  undefined,
+                                  "Aktivität wieder in der Wertung.",
+                                )
+                              }
+                            >
+                              Wieder werten
+                            </button>
+                          ) : (
+                            <button
+                              className="text-button danger"
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    "Diese Aktivität von der Wertung ausschliessen?",
+                                  )
+                                )
+                                  mutate(`/admin/activities/${a.id}`, "DELETE");
+                              }}
+                            >
+                              Ausschliessen
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="muted">
+                Die letzten 1000 Aktivitäten werden angezeigt. Strava-Läufe
+                bitte in Strava ändern; Korrekturen hier über die manuelle
+                Eingabe erfassen.
+              </p>
+            </>
+          ) : (
+            <>
+              <h2>Läufergruppen moderieren</h2>
+              <div className="admin-list">
+                {data.groups.map((r) => (
+                  <article key={r.id}>
+                    <div>
+                      <strong>{r.name}</strong>
+                      <span>
+                        {runDate(
+                          r.starts_at + (r.starts_at.endsWith("Z") ? "" : "Z"),
+                        )}{" "}
+                        · {r.meeting_point}
+                      </span>
+                    </div>
+                    <button
+                      className="text-button danger"
+                      onClick={() => {
+                        if (window.confirm("Diesen gemeinsamen Lauf absagen?"))
+                          mutate(`/admin/community/${r.id}`, "DELETE");
+                      }}
+                    >
+                      Absagen
+                    </button>
+                  </article>
+                ))}
+              </div>
+              {!data.groups.length && (
+                <p className="empty-state">Aktuell keine Läufe geplant.</p>
+              )}
+            </>
           )}
-        </div>
+          <button
+            className="text-button admin-reload"
+            onClick={() => load().catch(failure)}
+          >
+            Daten neu laden
+          </button>
+        </>
       )}
     </div>
   );

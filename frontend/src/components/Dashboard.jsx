@@ -1,341 +1,291 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
-import { previewLeaderboard, previewUser } from "../previewData";
+import { api, errorText, loginUrl } from "../api";
+import ChallengeProgress from "./ChallengeProgress";
+import ChallengeStats from "./ChallengeStats";
+import Leaderboard from "./Leaderboard";
+import Groups from "./Groups";
 
-axios.defaults.withCredentials = true;
-
-export default function Dashboard({ refreshKey = 0 }) {
-  const isPreview = import.meta.env.VITE_UI_PREVIEW === "true";
-  const [view, setView] = useState("personal"); // "personal" | "public"
-  const [user, setUser] = useState(null);
-  const [leaderboard, setLeaderboard] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      if (isPreview) {
-        setUser(previewUser);
-        setLeaderboard(previewLeaderboard);
-        return;
-      }
-
-      const [u, lb] = await Promise.all([
-        axios
-          .get("/users/me")
-          .then((r) => r.data)
-          .catch((e) => {
-            console.warn("GET /users/me failed", e);
-            return null;
-          }),
-        // FIX: withCredentials: false entfernen (nutze globale Einstellung)
-        axios
-          .get("/users/", { params: { t: Date.now() } })
-          .then((r) => r.data)
-          .catch((e) => {
-            console.warn("GET /users/ failed", e);
-            return [];
-          }),
-      ]);
-
-      setUser(u && u.name ? u : null);
-
-      const lbArr = Array.isArray(lb) ? lb : [];
-      // Fallback: Wenn öffentliches LB leer ist, aber User vorhanden,
-      // zeige wenigstens dessen Slots/Score an.
-      if (lbArr.length === 0 && u && u.name) {
-        const slots = Array.isArray(u.slots)
-          ? u.slots.map((s) =>
-              s && typeof s === "object" && "km" in s
-                ? Number(s.km)
-                : typeof s === "number"
-                ? Number(s)
-                : null
-            )
-          : [];
-        lbArr.push({
-          id: u.id ?? 0,
-          name: u.name,
-          total_score: u.total_score ?? 0,
-          km_total: slots.reduce((s, v) => s + (v ? v : 0), 0),
-          slots: slots,
-        });
-      }
-      setLeaderboard(lbArr);
-    } catch (err) {
-      console.error("Dashboard load error:", err);
-    } finally {
-      setLoading(false);
-    }
+export default function Dashboard({ user, version, refresh, authLoading }) {
+  const readTab = () => {
+    const value = new URLSearchParams(location.search).get("tab");
+    return ["ranking", "groups"].includes(value) ? value : "overview";
   };
-
+  const [tab, setTab] = useState(readTab),
+    [data, setData] = useState(null),
+    [error, setError] = useState(""),
+    [syncing, setSyncing] = useState(false);
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey]);
-
-  // FIX: kmFromSlots und daysFromSlots für integer slots
-  const kmFromSlots = (slots) => {
-    if (!Array.isArray(slots)) return 0;
-    return slots.reduce((sum, s) => {
-      if (s === null || s === undefined) return sum;
-      if (typeof s === "number") return sum + s;
-      return sum;
-    }, 0);
-  };
-
-  const daysFromSlots = (slots) => {
-    if (!Array.isArray(slots)) return 0;
-    return slots.reduce((n, s) => {
-      if (s === null || s === undefined) return n;
-      if (typeof s === "number") return s > 0 ? n + 1 : n;
-      return n;
-    }, 0);
-  };
-
-  const PersonalGrid = ({ slots }) => {
-    const arr = Array.isArray(slots)
-      ? slots
-          .slice(0, 30)
-          .concat(Array(30 - Math.min(30, slots.length)).fill(null))
-      : Array(30).fill(null);
-    return (
-      <div className="personal-grid" aria-hidden="true">
-        {arr.map((s, i) => {
-          const filled = !!s;
-          const km = filled
-            ? typeof s === "number"
-              ? s
-              : s.km ?? ""
-            : null;
-          return (
-            <div
-              key={i}
-              className={`personal-cell ${filled ? "filled" : "empty"}`}
-              title={filled ? `${km} km` : `Tag ${i + 1}`}
-            >
-              <div className="cell-day">{i + 1}</div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
-  const MiniGrid = ({ slots }) => {
-    const arr = Array.isArray(slots)
-      ? slots
-          .slice(0, 30)
-          .concat(Array(30 - Math.min(30, slots.length)).fill(null))
-      : Array(30).fill(null);
-    return (
-      <div className="mini-grid" aria-hidden="true">
-        {arr.map((s, i) => (
-          <div
-            key={i}
-            className={`mini-cell ${s ? "mini-filled" : "mini-empty"}`}
-          />
-        ))}
-      </div>
-    );
-  };
-
-  // Calculate total km from all players
-  const totalKmAll = leaderboard.reduce((sum, p) => sum + kmFromSlots(p.slots), 0);
-
-  // NEW: compute competition-style ranks (equal scores => equal rank; next rank = position index)
-  const computeRanks = (list) => {
-    const ranks = [];
-    let lastScore = null;
-    let lastRank = 0;
-    for (let i = 0; i < list.length; i++) {
-      // prefer explicit total_score, otherwise fallback to kmFromSlots
-      const score = Number(list[i]?.total_score ?? kmFromSlots(list[i]?.slots) ?? 0);
-      const position = i + 1;
-      if (lastScore !== null && score === lastScore) {
-        ranks.push(lastRank);
-      } else {
-        ranks.push(position);
-        lastRank = position;
-        lastScore = score;
-      }
+    const handler = () => setTab(readTab());
+    window.addEventListener("popstate", handler);
+    return () => window.removeEventListener("popstate", handler);
+  }, []);
+  useEffect(() => {
+    let alive = true;
+    Promise.all([
+      api("/challenge"),
+      api("/challenge/statistics"),
+      api("/users/"),
+    ])
+      .then(([config, stats, people]) => {
+        if (alive) {
+          setData({ config, stats, people });
+          setError("");
+        }
+      })
+      .catch((e) => {
+        if (alive) setError(errorText(e));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [version]);
+  function changeTab(value) {
+    setTab(value);
+    const url = new URL(location);
+    value === "overview"
+      ? url.searchParams.delete("tab")
+      : url.searchParams.set("tab", value);
+    history.pushState({}, "", url);
+  }
+  async function sync() {
+    setSyncing(true);
+    try {
+      await api("/users/me/sync", { method: "POST" });
+      setTimeout(refresh, 5000);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setSyncing(false);
     }
-    return ranks;
-  };
-
-  const ranks = computeRanks(leaderboard);
-
+  }
+  const current = data?.config.periods.find((p) => p.current),
+    open =
+      user?.cells.filter((c) => c.status === "open").map((c) => c.km) || [];
   return (
-    <div className="simple-dashboard" style={{ padding: 0 }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 16,
-          flexWrap: "wrap",
-          paddingBottom: 12,
-          borderBottom: "1px solid #f0f0f0"
-        }}
-      >
+    <div className="dashboard">
+      <div className="page-heading">
         <div>
-          <h1 style={{ margin: 0 }}>November Challenge</h1>
+          <span className="eyebrow">
+            {data?.config.year || 2026} · 1.–30. November
+          </span>
+          <h1>November Challenge</h1>
         </div>
-        <div className="tabs" role="tablist" aria-label="View selector">
-          <button
-            className={`tab ${view === "personal" ? "active" : ""}`}
-            onClick={() => setView("personal")}
-          >
-            Übersicht
-          </button>
-          <button
-            className={`tab ${view === "public" ? "active" : ""}`}
-            onClick={() => setView("public")}
-          >
-            Rangliste
-          </button>
-        </div>
+        <nav className="tabs" aria-label="Hauptnavigation">
+          {[
+            ["overview", "Übersicht"],
+            ["ranking", "Rangliste"],
+            ["groups", "Läufergruppen"],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              className={tab === key ? "active" : ""}
+              aria-current={tab === key ? "page" : undefined}
+              onClick={() => changeTab(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
       </div>
-
-      {/* Gesamt-KM Anzeige nur auf Ranglisten-Tab */}
-      {view === "public" && (
-        <div style={{ marginTop: 16, marginBottom: 16, width: "100%" }}>
-          <button
-            className="btn primary"
-            style={{
-              cursor: "default",
-              pointerEvents: "none",
-              width: "100%",
-              fontSize: "15px",
-              padding: "14px 16px"
-            }}
-          >
-          Zusammen haben wir <br />{totalKmAll} km gesammelt!
+      {error && (
+        <div className="notice error" role="alert">
+          {error}{" "}
+          <button className="text-button" onClick={refresh}>
+            Erneut laden
           </button>
         </div>
       )}
-
-      <div style={{ marginTop: 18 }}>
-        {view === "personal" && (
-          <div>
-            <h2 style={{ marginTop: 0 }}>Übersicht</h2>
-            {loading ? (
-              <div style={{ color: "#666" }}>Lädt…</div>
-            ) : !user ? (
-              <div className="not-logged">
-                <div className="not-logged-text">
-                  <p>
-                    Du bist nicht angemeldet. Bitte mit Strava verbinden, um
-                    deine persönliche Übersicht zu sehen.
-                  </p>
+      {tab === "groups" ? (
+        <Groups user={user} />
+      ) : !data ? (
+        <p className="empty-state" aria-live="polite">
+          Challenge wird geladen …
+        </p>
+      ) : tab === "ranking" ? (
+        <Leaderboard people={data.people} total={data.stats.total_km} />
+      ) : (
+        <>
+          {user && (
+            <section
+              className="personal-panel"
+              aria-labelledby="personal-title"
+            >
+              <div className="section-heading">
+                <div>
+                  <span className="eyebrow">Deine Challenge</span>
+                  <h2 id="personal-title">Hallo {user.name.split(" ")[0]}.</h2>
                 </div>
-                <div className="not-logged-action">
-                  <a
-                    className="btn primary"
-                    href={`${
-                      window.__API_BASE__ || axios.defaults.baseURL
-                    }/auth/login`}
-                  >
-                    Connect with Strava
-                  </a>
+                <div className="personal-totals">
+                  <strong>
+                    {user.completed_count}
+                    <small>/30</small>
+                  </strong>
+                  <span>
+                    Distanzen · <b>{user.total_score} km</b>
+                  </span>
                 </div>
               </div>
-            ) : (
-              <div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 12,
-                    flexWrap: "wrap",
-                  }}
+              <div className="week-focus">
+                <span className="week-badge">
+                  {current
+                    ? `Woche ${current.number}`
+                    : data.config.server_date === data.config.finale_date
+                      ? "Abschlusslauf"
+                      : "Dein nächster Schritt"}
+                </span>
+                <div>
+                  {current ? (
+                    current.published ? (
+                      open.length ? (
+                        <>
+                          <strong>
+                            Noch offen:{" "}
+                            {open.map((km) => `${km} km`).join(" · ")}
+                          </strong>
+                          <span>
+                            Bis{" "}
+                            {new Date(
+                              current.ends_on + "T12:00",
+                            ).toLocaleDateString("de-CH", {
+                              day: "numeric",
+                              month: "numeric",
+                            })}{" "}
+                            · Reihenfolge frei wählbar
+                          </span>
+                        </>
+                      ) : (
+                        <strong>
+                          Alle Distanzen dieser Woche erledigt. Gut gelaufen!
+                        </strong>
+                      )
+                    ) : (
+                      <>
+                        <strong>
+                          Die Distanzen dieser Woche werden bald veröffentlicht.
+                        </strong>
+                        <span>
+                          Auslosung am{" "}
+                          {new Date(
+                            current.draw_on + "T12:00",
+                          ).toLocaleDateString("de-CH")}
+                        </span>
+                      </>
+                    )
+                  ) : (
+                    <>
+                      <strong>
+                        {data.config.server_date < `${data.config.year}-11-01`
+                          ? "Am 1. November startet die Challenge."
+                          : data.config.server_date === data.config.finale_date
+                            ? `Heute: mindestens ${data.config.finale_km} km für den Abschlusslauf.`
+                            : "Hier siehst du deinen Fortschritt für den ganzen November."}
+                      </strong>
+                      <span>
+                        ★ {data.config.finale_km} km sind für den gemeinsamen
+                        Abschluss am 30.11. reserviert.
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+              <ChallengeProgress cells={user.cells} />
+              <details className="rules">
+                <summary>So zählt dein Lauf</summary>
+                <p>
+                  Pro Tag zählt dein längster einzelner Lauf. Er erledigt die
+                  grösste noch offene Distanz deiner aktuellen Woche, die du
+                  erreicht hast. 35 km können also das 29-km-Feld erledigen.
+                  Kürzere Läufe werden nicht zusammengerechnet, offene Felder
+                  werden nicht in die nächste Woche übertragen.
+                </p>
+                <p>
+                  Am 30.11. zählt ein Lauf mit mindestens{" "}
+                  {data.config.finale_km} km automatisch für den Abschluss.
+                  Später hochgeladene Aktivitäten werden nach ihrem Lauftag in
+                  der Schweizer Zeitzone gewertet.
+                </p>
+              </details>
+              <div className="sync-line">
+                <span className="muted">
+                  {user.last_synced_at
+                    ? `Letzte Synchronisation: ${new Date(user.last_synced_at).toLocaleString("de-CH", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Zurich" })}`
+                    : "Deine Strava-Läufe werden im Hintergrund geladen."}
+                </span>
+                <button
+                  className="text-button"
+                  disabled={syncing}
+                  onClick={sync}
                 >
-                  <div>
-                    <div style={{ fontWeight: 700 }}>{user.name}</div>
-                    <div style={{ color: "#444" }}>
-                      Tage: {daysFromSlots(user.slots)}
-                    </div>
-                    <div style={{ color: "#444" }}>
-                      Km: {kmFromSlots(user.slots)}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ marginTop: 12 }}>
-                  <PersonalGrid slots={user.slots} />
-                </div>
+                  {syncing ? "Wird gestartet …" : "Strava synchronisieren"}
+                </button>
               </div>
-            )}
-          </div>
-        )}
-
-        {view === "public" && (
-          <div>
-            <h2 style={{ marginTop: 0 }}>Rangliste</h2>
-            {loading ? (
-              <div style={{ color: "#666" }}>Lädt…</div>
-            ) : leaderboard.length === 0 ? (
-              <div style={{ color: "#666" }}>Keine Teilnehmer gefunden.</div>
-            ) : (
-              <div style={{ display: "grid", gap: 8 }}>
-                {leaderboard.map((p, idx) => (
-                  <div
-                    key={p.id ?? `${p.name}-${idx}`}
-                    className="leader-row"
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: 10,
-                      borderRadius: 8,
-                      border: "1px solid #eee",
-                      // Nur Rang 1 bekommt die goldene Box
-                      background: (ranks[idx] === 1) ? "#fffbeb" : "#fff",
-                    }}
-                  >
-                    <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                      <div
-                        style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: 8,
-                          background: "#00b3a6",
-                          color: "#fff",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {String(p.name || "U")
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")
-                          .slice(0, 2)
-                          .toUpperCase()}
-                      </div>
-                      <div>
-                        <div style={{ fontWeight: 700 }}>{p.name}</div>
-                        <div style={{ fontSize: 13, color: "#666" }}>
-                          <div>Tage: {daysFromSlots(p.slots)}</div>
-                          <div>Km: {p.total_score}</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                      <MiniGrid slots={p.slots} />
-                      {/* use computed competition rank instead of idx+1 */}
-                      <div style={{ fontWeight: 700, fontSize: 16 }}>{ranks[idx]}</div>
-                    </div>
-                  </div>
-                ))}
+              {!user.strava_connected && (
+                <p className="notice">
+                  Die Strava-Verbindung muss erneuert werden.{" "}
+                  <a href={loginUrl()}>Strava erneut verbinden</a>.
+                </p>
+              )}
+              {user.sync_error && (
+                <p className="notice" role="status">
+                  {user.sync_error}
+                </p>
+              )}
+            </section>
+          )}
+          {!user && !authLoading && (
+            <section className="intro">
+              <div>
+                <span className="eyebrow">30 Distanzen. Dein November.</span>
+                <h2>Ein Monat, viele gemeinsame Schritte.</h2>
+                <p>
+                  Jede Woche werden neue Distanzen ausgelost. Du entscheidest,
+                  an welchem Tag du welche läufst. Melde dich oben mit Strava an
+                  – dann erscheint hier deine persönliche Übersicht.
+                </p>
               </div>
-            )}
-          </div>
-        )}
-      </div>
+              <ol>
+                <li>
+                  <b>Auslosung abwarten</b>
+                  <span>8 / 7 / 7 / 7 Distanzen pro Woche</span>
+                </li>
+                <li>
+                  <b>Eine Distanz pro Tag erledigen</b>
+                  <span>Dein längster Lauf zählt automatisch</span>
+                </li>
+                <li>
+                  <b>Gemeinsam abschliessen</b>
+                  <span>Am 30.11. mit {data.config.finale_km} km</span>
+                </li>
+              </ol>
+            </section>
+          )}
+          <ChallengeStats stats={data.stats} config={data.config} />
+          <details className="rules schedule">
+            <summary>Auslosungen und Zeiträume</summary>
+            <div className="period-list">
+              {data.config.periods.map((p) => (
+                <div key={p.number}>
+                  <strong>
+                    Woche {p.number} · {p.capacity} Distanzen
+                  </strong>
+                  <span>
+                    {new Date(p.starts_on + "T12:00").toLocaleDateString(
+                      "de-CH",
+                    )}{" "}
+                    –{" "}
+                    {new Date(p.ends_on + "T12:00").toLocaleDateString("de-CH")}
+                  </span>
+                  <span>
+                    {p.published
+                      ? p.distances.map((n) => `${n} km`).join(" · ")
+                      : `Auslosung am ${new Date(p.draw_on + "T12:00").toLocaleDateString("de-CH")}`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </details>
+        </>
+      )}
     </div>
   );
 }

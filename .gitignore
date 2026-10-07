@@ -187,8 +187,11 @@ cython_debug/
 /frontend/node_modules/
 /frontend/dist/
 /frontend/.vite/
-/frontend/package-lock.json
-/frontend/.env.local
+/frontend/.env*.local
+/frontend/test-results/
+/frontend/playwright-report/
+/output/verification/
 
 # Local env
 .env
+/.env.local

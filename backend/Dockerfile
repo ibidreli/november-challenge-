@@ -12,4 +12,4 @@ COPY . .
 ENV PYTHONUNBUFFERED=1
 
 # Start the FastAPI app
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Float, String, Date, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, Float, String, Date, ForeignKey, Boolean, DateTime
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -11,6 +11,7 @@ class Activity(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     strava_id = Column(String, unique=True, nullable=True)
     date = Column(Date)
+    started_at = Column(DateTime, nullable=True)
     distance_km = Column(Float)
     effective_km = Column(Integer)
     status = Column(String, default="pending")

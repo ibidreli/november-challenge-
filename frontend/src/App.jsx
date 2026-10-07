@@ -1,57 +1,126 @@
-import React, { useEffect, useState } from "react";
-import axios from "axios";
+import React, { useCallback, useEffect, useState } from "react";
 import Dashboard from "./components/Dashboard";
 import AdminPanel from "./components/AdminPanel";
+import { api, isPreview, loginUrl, errorText } from "./api";
+import { previewLogin } from "./previewData";
 import logo from "../logo/Logo.png";
 
 export default function App() {
-  const isPreview = import.meta.env.VITE_UI_PREVIEW === "true";
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [syncing, setSyncing] = useState(false);
-  const [currentPage, setCurrentPage] = useState(() => {
-    const path = window.location.pathname;
-    const hash = window.location.hash;
-    const isAdmin = (path && path.includes("/admin")) || (hash && hash.includes("/admin"));
-    return isAdmin ? "admin" : "dashboard";
-  });
-
-  useEffect(() => {
-    const path = window.location.pathname;
-    const hash = window.location.hash;
-    const isAdmin = (path && path.includes("/admin")) || (hash && hash.includes("/admin"));
-    if (isAdmin) {
-      setCurrentPage("admin");
+  const [user, setUser] = useState(null),
+    [authLoading, setAuthLoading] = useState(true);
+  const [error, setError] = useState(""),
+    [version, setVersion] = useState(0);
+  const admin = window.location.pathname.replace(/\/$/, "") === "/admin";
+  const refresh = useCallback(async () => {
+    try {
+      setUser(await api("/users/me"));
+      setError("");
+    } catch (e) {
+      if (e.response?.status === 401) {
+        setUser(null);
+        setError("");
+      } else setError(errorText(e));
+    } finally {
+      setAuthLoading(false);
+      setVersion((v) => v + 1);
     }
   }, []);
-
-  // ⚠️ ENTFERNT: Nicht bei jedem Reload synchen!
-  // Stattdessen: Background-Task auf dem Backend macht Auto-Sync alle 30 Min
-  // Frontend lädt nur Daten, triggert keinen Strava-Sync beim Reload
-
+  useEffect(() => {
+    refresh();
+    const timer = setInterval(refresh, 60000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [refresh]);
+  async function logout() {
+    try {
+      await api("/auth/logout", { method: "POST" });
+      setUser(null);
+      setError("");
+      setVersion((v) => v + 1);
+    } catch (e) {
+      setError(errorText(e));
+    }
+  }
   return (
-    <div>
+    <div className="app-shell">
+      <a className="skip-link" href="#main">
+        Zum Inhalt
+      </a>
       <header className="header">
-        <div className="header-left">
-          <img src={logo} alt="November Jogging Challenge" className="logo" />
-          <div className="app-title">
-            <div className="title-main">November Jogging Challenge</div>
-            <div className="title-sub">Monatliche Jogging Challenge</div>
+        <a href="/" className="brand">
+          <img src={logo} alt="" className="logo" />
+          <div>
+            <strong>November Jogging Challenge</strong>
+            <span>Gemeinsam durch den November</span>
           </div>
+        </a>
+        <div className="account">
+          {authLoading ? (
+            <span className="muted">Anmeldung prüfen …</span>
+          ) : user ? (
+            <>
+              <span className="account-name">{user.name}</span>
+              <button className="btn small" onClick={logout}>
+                Abmelden
+              </button>
+            </>
+          ) : (
+            <a
+              className="btn strava"
+              href={isPreview ? "#" : loginUrl()}
+              onClick={
+                isPreview
+                  ? (e) => {
+                      e.preventDefault();
+                      previewLogin(true);
+                      refresh();
+                    }
+                  : undefined
+              }
+            >
+              Mit Strava anmelden <span aria-hidden="true">↗</span>
+            </a>
+          )}
         </div>
       </header>
-
-      <main className="container" style={{ marginTop: 20 }}>
-        {syncing && (
-          <div style={{ marginBottom: 0, color: "#666", fontSize: 0 }}>
-            
+      {isPreview && (
+        <div className="preview-banner">
+          Vorschau mit Beispieldaten · Änderungen werden nicht gespeichert.
+        </div>
+      )}
+      <main id="main" className="container">
+        {error && (
+          <div role="alert" className="notice error">
+            {error}{" "}
+            <button onClick={refresh} className="text-button">
+              Erneut versuchen
+            </button>
           </div>
         )}
-        {currentPage === "admin" ? (
-          <AdminPanel isPreview={isPreview} />
+        {new URLSearchParams(location.search).has("auth_error") && (
+          <div className="notice">
+            Die Strava-Anmeldung wurde nicht abgeschlossen. Du kannst sie oben
+            erneut starten.
+          </div>
+        )}
+        {admin ? (
+          <AdminPanel />
         ) : (
-          <Dashboard refreshKey={refreshKey} />
+          <Dashboard
+            user={user}
+            version={version}
+            refresh={refresh}
+            authLoading={authLoading}
+          />
         )}
       </main>
+      <footer>
+        November Challenge · Gemeinsam zählt jeder Lauf.{" "}
+        <a href={admin ? "/" : "/admin"}>{admin ? "Zur Challenge" : "Admin"}</a>
+      </footer>
     </div>
   );
 }

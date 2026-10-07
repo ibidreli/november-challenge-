@@ -1,0 +1,281 @@
+<div id="njc-proposal" aria-label="November Challenge: Entwurf mit Beispieldaten">
+  <style>
+    #njc-proposal {
+      color-scheme: inherit;
+      --njc-bg: light-dark(#f6f6f6, #161b1c);
+      --njc-surface: light-dark(#ffffff, #202829);
+      --njc-ink: light-dark(#171b1c, #f1f4f4);
+      --njc-muted: light-dark(#586366, #b3c0c1);
+      --njc-line: light-dark(#e6eaea, #3a484a);
+      --njc-empty: light-dark(#edf0f1, #354144);
+      --njc-teal: light-dark(#008b80, #4ad2c2);
+      --njc-on-teal: light-dark(#ffffff, #063a34);
+      --njc-soft: light-dark(#ebf8f5, #223c37);
+      --njc-gold: light-dark(#fffbee, #3b3524);
+      --njc-login: light-dark(#cd3e09, #ff976e);
+      --njc-on-login: light-dark(#ffffff, #3c1606);
+      font-family: Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.45;
+      color: var(--njc-ink);
+      container: njc / inline-size;
+      width: 100%;
+      margin-inline: auto;
+    }
+    #njc-proposal * { box-sizing: border-box; }
+    #njc-proposal [hidden] { display: none !important; }
+    #njc-proposal .njc-shell { background: var(--njc-bg); padding: 18px; }
+    #njc-proposal .njc-header, #njc-proposal .njc-main { background: var(--njc-surface); border-radius: 12px; padding: 20px; }
+    #njc-proposal .njc-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; }
+    #njc-proposal .njc-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    #njc-proposal .njc-mark { color: var(--njc-teal); font-size: 42px; font-weight: 700; line-height: 1; }
+    #njc-proposal .njc-brand strong { font-size: 17px; }
+    #njc-proposal .njc-sub, #njc-proposal .njc-muted { color: var(--njc-muted); }
+    #njc-proposal .njc-sub { font-size: 12px; }
+    #njc-proposal button { font: inherit; cursor: pointer; }
+    #njc-proposal .njc-button { min-height: 44px; border: 0; border-radius: 7px; padding: 10px 16px; background: var(--njc-teal); color: var(--njc-on-teal); font-weight: 700; }
+    #njc-proposal .njc-login { background: var(--njc-login); color: var(--njc-on-login); white-space: nowrap; }
+    #njc-proposal .njc-account { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+    #njc-proposal .njc-textbutton { border: 0; background: transparent; color: var(--njc-muted); text-decoration: underline; min-height: 44px; }
+    #njc-proposal .njc-top { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; border-bottom: 1px solid var(--njc-line); padding-bottom: 16px; }
+    #njc-proposal h1 { font-size: 28px; line-height: 1.2; margin: 0; font-weight: 700; }
+    #njc-proposal h2 { font-size: 21px; margin: 0; font-weight: 700; }
+    #njc-proposal h3 { font-size: 17px; margin: 0; font-weight: 700; }
+    #njc-proposal p { margin: 6px 0 0; }
+    #njc-proposal .njc-tabs { display: flex; border: 1px solid var(--njc-line); border-radius: 7px; overflow: hidden; }
+    #njc-proposal .njc-tab { border: 0; background: var(--njc-surface); color: var(--njc-ink); padding: 10px 12px; min-height: 44px; font-size: 14px; }
+    #njc-proposal .njc-tab[aria-selected="true"] { background: var(--njc-teal); color: var(--njc-on-teal); font-weight: 700; }
+    #njc-proposal .njc-intro { padding: 16px 0; border-bottom: 1px solid var(--njc-line); }
+    #njc-proposal .njc-section { margin-top: 22px; }
+    #njc-proposal .njc-between { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px 16px; }
+    #njc-proposal .njc-week { padding: 13px 16px; margin-top: 12px; border-radius: 8px; background: var(--njc-soft); }
+    #njc-proposal .njc-grid { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 7px; margin-top: 14px; }
+    #njc-proposal .njc-cell { display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 44px; background: var(--njc-empty); color: var(--njc-muted); border: 2px solid transparent; border-radius: 8px; font-weight: 700; }
+    #njc-proposal .njc-cell.njc-current, #njc-proposal .njc-mini.njc-current { border-color: var(--njc-teal); color: var(--njc-ink); background: var(--njc-surface); }
+    #njc-proposal .njc-cell.njc-done, #njc-proposal .njc-mini.njc-done { background: var(--njc-teal); color: var(--njc-on-teal); border-color: transparent; }
+    #njc-proposal .njc-cell.njc-final, #njc-proposal .njc-mini.njc-final { border: 1px dashed var(--njc-muted); }
+    #njc-proposal .njc-cell[aria-pressed="true"] { outline: 2px solid var(--njc-ink); outline-offset: 2px; }
+    #njc-proposal .njc-caption { font-size: 12px; color: var(--njc-muted); margin-top: 12px; }
+    #njc-proposal .njc-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px; color: var(--njc-muted); font-size: 12px; }
+    #njc-proposal .njc-key { display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 2px; background: var(--njc-empty); }
+    #njc-proposal .njc-key-done { background: var(--njc-teal); }
+    #njc-proposal .njc-key-current { border: 2px solid var(--njc-teal); background: var(--njc-surface); }
+    #njc-proposal .njc-final-note { border-top: 1px solid var(--njc-line); margin-top: 15px; padding-top: 12px; font-size: 13px; }
+    #njc-proposal .njc-chart { position: relative; margin-top: 12px; min-height: 215px; }
+    #njc-proposal .njc-chart svg { width: 100%; display: block; overflow: visible; }
+    #njc-proposal .njc-chart text { fill: var(--njc-muted); font-size: 12px; font-family: Arial, sans-serif; }
+    #njc-proposal .njc-chart .njc-chartline { fill: none; stroke: var(--njc-teal); stroke-width: 3; }
+    #njc-proposal .njc-chart .njc-chartdot { fill: var(--njc-teal); }
+    #njc-proposal .njc-chart .njc-chartframe, #njc-proposal .njc-chart .njc-chartguide { fill: none; stroke: var(--njc-line); stroke-width: 1; }
+    #njc-proposal .njc-chart-hit { position: absolute; width: 44px; height: 44px; padding: 0; background: transparent; border: 0; transform: translate(-50%, -50%); border-radius: 50%; }
+    #njc-proposal .njc-chart-hit:focus-visible { outline: 2px solid var(--njc-teal); outline-offset: 2px; }
+    #njc-proposal .njc-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    #njc-proposal .njc-total { margin-top: 16px; border-radius: 8px; padding: 14px; text-align: center; background: var(--njc-teal); color: var(--njc-on-teal); font-weight: 700; }
+    #njc-proposal .njc-rank-axis, #njc-proposal .njc-rankline { display: grid; grid-template-columns: minmax(170px, 1fr) minmax(440px, 2.4fr) 24px; gap: 14px; align-items: center; }
+    #njc-proposal .njc-rank-axis { margin: 20px 13px 7px; font-size: 11px; color: var(--njc-muted); }
+    #njc-proposal .njc-minigrid { display: grid; grid-template-columns: repeat(30, minmax(0, 1fr)); gap: 3px; align-items: center; }
+    #njc-proposal .njc-axisnumber { text-align: center; font-size: 11px; }
+    #njc-proposal .njc-mini { aspect-ratio: 1; min-width: 0; border-radius: 2px; background: var(--njc-empty); border: 1px solid transparent; text-align: center; font-size: 11px; line-height: 1; display: flex; justify-content: center; align-items: center; }
+    #njc-proposal .njc-minigrid[data-numbered="true"] .njc-mini { min-height: 18px; }
+    #njc-proposal .njc-runner { border: 1px solid var(--njc-line); border-radius: 8px; margin-top: 8px; background: var(--njc-surface); }
+    #njc-proposal .njc-runner.njc-first { background: var(--njc-gold); }
+    #njc-proposal summary { list-style: none; cursor: pointer; }
+    #njc-proposal summary::-webkit-details-marker { display: none; }
+    #njc-proposal .njc-rankline { min-height: 77px; padding: 12px; }
+    #njc-proposal .njc-person { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    #njc-proposal .njc-avatar { width: 36px; height: 36px; flex-shrink: 0; border-radius: 8px; background: var(--njc-teal); color: var(--njc-on-teal); display: flex; align-items: center; justify-content: center; font-weight: 700; }
+    #njc-proposal .njc-person strong { font-size: 14px; overflow-wrap: anywhere; }
+    #njc-proposal .njc-person small { display: block; font-size: 12px; color: var(--njc-muted); }
+    #njc-proposal .njc-ranknumber { font-weight: 700; text-align: right; }
+    #njc-proposal .njc-runner-detail { border-top: 1px solid var(--njc-line); padding: 14px; }
+    #njc-proposal .njc-runner-detail .njc-grid { grid-template-columns: repeat(10, minmax(0, 1fr)); }
+    #njc-proposal .njc-group { border: 1px solid var(--njc-line); border-radius: 8px; padding: 16px; margin-top: 12px; }
+    #njc-proposal .njc-group .njc-button { margin-top: 14px; }
+    #njc-proposal .njc-guest-form { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+    #njc-proposal .njc-guest-form label { flex: 1; min-width: 140px; }
+    #njc-proposal .njc-guest-form input { display: block; width: 100%; min-height: 44px; margin-top: 4px; padding: 9px; font-size: 16px; border: 1px solid var(--njc-line); border-radius: 6px; background: var(--njc-surface); color: var(--njc-ink); }
+    #njc-proposal .njc-guest-form .njc-button { align-self: end; }
+    #njc-proposal .njc-foot { margin-top: 16px; font-size: 11px; color: var(--njc-muted); text-align: right; }
+    @container njc (max-width: 780px) {
+      #njc-proposal .njc-rank-axis { display: none; }
+      #njc-proposal .njc-rankline { grid-template-columns: minmax(120px, 1fr) 118px 20px; gap: 10px; }
+      #njc-proposal .njc-minigrid { grid-template-columns: repeat(10, minmax(0, 1fr)); }
+      #njc-proposal .njc-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      #njc-proposal .njc-minigrid[data-numbered="true"] { width: 138px; }
+      #njc-proposal .njc-runner-detail .njc-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    }
+    @container njc (max-width: 490px) {
+      #njc-proposal .njc-shell { padding: 10px; }
+      #njc-proposal .njc-header, #njc-proposal .njc-main { padding: 15px; }
+      #njc-proposal .njc-header { flex-wrap: wrap; gap: 12px; }
+      #njc-proposal .njc-header > .njc-login { width: 100%; }
+      #njc-proposal .njc-brand strong { font-size: 15px; }
+      #njc-proposal h1 { font-size: 25px; }
+      #njc-proposal h2 { font-size: 19px; }
+      #njc-proposal .njc-tabs { width: 100%; }
+      #njc-proposal .njc-tab { flex: 1; padding: 10px 6px; font-size: 13px; }
+      #njc-proposal .njc-rankline { grid-template-columns: minmax(100px, 1fr) 91px 16px; gap: 7px; padding: 10px; }
+      #njc-proposal .njc-person { gap: 7px; }
+      #njc-proposal .njc-avatar { width: 30px; height: 30px; font-size: 12px; }
+      #njc-proposal .njc-person strong { font-size: 13px; }
+      #njc-proposal .njc-person small { font-size: 11px; }
+      #njc-proposal .njc-minigrid { gap: 2px; }
+      #njc-proposal .njc-minigrid[data-numbered="true"] { width: auto; }
+      #njc-proposal .njc-minigrid[data-numbered="true"] .njc-mini { font-size: 11px; min-height: 18px; }
+      #njc-proposal .njc-rankline:has(.njc-minigrid[data-numbered="true"]) { grid-template-columns: minmax(0, 1fr) 127px 16px; }
+      #njc-proposal .njc-week { padding: 12px; }
+      #njc-proposal .njc-grid { gap: 6px; }
+    }
+  </style>
+  <div class="njc-shell">
+    <header class="njc-header"></header>
+    <main class="njc-main">
+      <div class="njc-top">
+        <h1>November Challenge</h1>
+        <nav class="njc-tabs" aria-label="Hauptnavigation">
+          <button class="njc-tab" type="button" data-page="overview" aria-selected="true">Übersicht</button>
+          <button class="njc-tab" type="button" data-page="ranking" aria-selected="false">Rangliste</button>
+          <button class="njc-tab" type="button" data-page="groups" aria-selected="false">Läufergruppen</button>
+        </nav>
+      </div>
+      <div class="njc-content"></div>
+      <div class="njc-foot">Entwurf · Beispieldaten vom 4. November 2026</div>
+    </main>
+  </div>
+  <script>
+    (() => {
+      const root = document.getElementById('njc-proposal');
+      const state = { loggedIn: false, page: 'overview', personalGrid: 'all', numbered: false, layout: 'auto', joined: false, showJoin: false, guestName: '' };
+      const week = [5, 6, 9, 14, 19, 24, 27, 29];
+      const people = [
+        { name: 'Sofia Example', initials: 'SE', done: [6, 27, 29] },
+        { name: 'Alex Runner', initials: 'AR', done: [9, 14, 24] },
+        { name: 'Mira Trail', initials: 'MT', done: [5, 6, 19] },
+        { name: 'Noah Meier', initials: 'NM', done: [5, 14] }
+      ];
+      const all = Array.from({ length: 30 }, (_, i) => i + 1);
+      const cumulative = [63, 123, 149, 158];
+      let chartObserver;
+      const content = root.querySelector('.njc-content');
+      const format = value => value.toLocaleString('de-CH', { maximumFractionDigits: 1 });
+      const score = person => person.done.reduce((sum, value) => sum + value, 0);
+      const cellClass = (km, person) => person.done.includes(km) ? 'njc-done' : week.includes(km) ? 'njc-current' : km === 15 ? 'njc-final' : '';
+      const cellLabel = (km, person) => km + ' km: ' + (person.done.includes(km) ? 'erledigt' : week.includes(km) ? 'diese Woche noch offen' : km === 15 ? 'Abschlusslauf am 30. November' : 'noch nicht ausgelost');
+      function grid(person, mini, values = all) {
+        return '<div class="' + (mini ? 'njc-minigrid' : 'njc-grid') + '"' + (mini ? ' data-numbered="' + state.numbered + '" aria-label="Erledigte Distanzen von ' + person.name + '"' : '') + '>' +
+          values.map(km => mini ? '<span class="njc-mini ' + cellClass(km, person) + '" data-tooltip="' + cellLabel(km, person) + '">' + (state.numbered ? km : '') + '</span>' :
+            '<button class="njc-cell ' + cellClass(km, person) + '" type="button" data-km="' + km + '" data-person="' + person.initials + '" aria-label="' + cellLabel(km, person) + '" aria-pressed="false">' + km + '</button>').join('') + '</div>';
+      }
+      function legend() {
+        return '<div class="njc-legend"><span><span class="njc-key njc-key-done"></span>Erledigt</span><span><span class="njc-key njc-key-current"></span>Diese Woche offen</span><span><span class="njc-key"></span>Noch nicht ausgelost</span></div>';
+      }
+      function personal() {
+        return '<section class="njc-section"><div class="njc-between"><h2>Deine Distanzen</h2><span class="njc-muted">Sofia · 3 von 30 erledigt</span></div>' +
+          '<div class="njc-week"><strong>Diese Woche · 1.–8. November · 3/8 erledigt</strong><p>Noch offen: <strong>5, 9, 14, 19 und 24 km</strong></p><p class="njc-caption">Der längste Lauf pro Tag zählt. Die grösste passende offene Distanz wird automatisch abgehakt.</p></div>' +
+          grid(people[0], false, state.personalGrid === 'week' ? week : all) + legend() +
+          '<p class="njc-caption njc-selection" aria-live="polite">Eine Distanz antippen, um ihren Status zu sehen.</p>' +
+          '<div class="njc-final-note">Abschlusslauf · 30. November · <strong>15 km reserviert</strong></div></section>';
+      }
+      function overview() {
+        return (state.loggedIn ? personal() : '<section class="njc-intro"><strong>Gemeinsam durch den November.</strong><p class="njc-muted">Jede Woche werden Distanzen ausgelost. Verbinde Strava, um deine offenen und erledigten Distanzen zu sehen.</p></section>') +
+          '<section class="njc-section"><div class="njc-between"><h2>Unsere Challenge in Kilometern</h2><strong>158 km</strong></div><p class="njc-caption">Gewertete Distanzen aller Teilnehmer · seit 1. November</p><div class="njc-chart"></div><p class="njc-caption njc-chart-detail" aria-live="polite">4. November · insgesamt 158 Challenge-km</p></section>';
+      }
+      function ranking() {
+        return '<div class="njc-total">Zusammen haben wir 158 Challenge-km gesammelt!</div><section class="njc-section"><h2>Rangliste</h2><p class="njc-caption">Jedes Feld steht für eine Distanz von 1 bis 30 km. Eine Person antippen für die genauen Distanzen.</p>' +
+          '<div class="njc-rank-axis"><span>Challenge-km · erledigt</span><div class="njc-minigrid">' + all.map(km => '<span class="njc-axisnumber">' + km + '</span>').join('') + '</div><span>Rang</span></div>' +
+          people.map((person, index) => '<details class="njc-runner ' + (index === 0 ? 'njc-first' : '') + '"><summary class="njc-rankline" aria-label="' + person.name + ', Rang ' + (index + 1) + ', ' + score(person) + ' Challenge-km. Distanzen anzeigen."><div class="njc-person"><span class="njc-avatar">' + person.initials + '</span><div><strong>' + person.name + '</strong><small>' + score(person) + ' km · ' + person.done.length + '/30</small></div></div>' + grid(person, true) + '<span class="njc-ranknumber">' + (index + 1) + '</span></summary><div class="njc-runner-detail"><strong>Diese Woche: ' + person.done.length + ' von 8 erledigt</strong>' + grid(person, false) + '<p class="njc-caption njc-selection" aria-live="polite">Eine Distanz antippen, um ihren Status zu sehen.</p></div></details>').join('') + legend() + '</section>';
+      }
+      function groups() {
+        return '<section class="njc-section"><div class="njc-between"><h2>Läufergruppen</h2><button class="njc-button" type="button" data-action="plan">+ Lauf planen</button></div><article class="njc-group"><h3>Feierabendlauf</h3><p><strong>6 km</strong> · 6:00 min/km</p><p>5. November · 18:30 Uhr</p><p class="njc-muted">Start: Bahnhof, beim Haupteingang</p><p class="njc-caption njc-participants"></p>' +
+          (state.showJoin ? '<form class="njc-guest-form"><label>Dein Name<input name="guestName" autocomplete="name" maxlength="60" required></label><button class="njc-button" type="submit">Teilnahme speichern</button></form>' : '<button class="njc-button" type="button" data-action="join">' + (state.joined ? 'Teilnahme absagen' : 'Teilnehmen') + '</button>') +
+          '</article><p class="njc-caption njc-group-status" aria-live="polite">' + (state.loggedIn ? 'Dein Name wird automatisch übernommen. Gastteilnahme bleibt möglich.' : 'Auch als Gast möglich. Zum Teilnehmen reicht dein Name.') + '</p></section>';
+      }
+      function drawChart() {
+        const chart = root.querySelector('.njc-chart');
+        if (!chart) return;
+        const width = Math.floor(chart.getBoundingClientRect().width);
+        if (width < 160) return;
+        const height = 215;
+        const left = 54, right = width - 24, top = 28, bottom = height - 36;
+        const ceiling = Math.ceil(Math.max(...cumulative) * 1.1 / 50) * 50;
+        const x = i => left + i * (right - left) / (cumulative.length - 1);
+        const y = value => bottom - value / ceiling * (bottom - top);
+        const ticks = [0, ceiling / 2, ceiling];
+        let markup = '<svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Kumulierte Challenge-Kilometer aller Teilnehmer: 63 km am 1., 123 km am 2., 149 km am 3. und 158 km am 4. November."><text x="0" y="14">Challenge-km</text><rect class="njc-chartframe" x="' + left + '" y="' + top + '" width="' + (right - left) + '" height="' + (bottom - top) + '"/>';
+        markup += ticks.map(value => '<line class="njc-chartguide" x1="' + left + '" y1="' + y(value) + '" x2="' + right + '" y2="' + y(value) + '"/><text x="' + (left - 9) + '" y="' + (y(value) + 4) + '" text-anchor="end">' + format(value) + '</text>').join('');
+        markup += '<path class="njc-chartline" d="' + cumulative.map((value, index) => (index ? 'L' : 'M') + x(index) + ',' + y(value)).join(' ') + '"/>';
+        markup += cumulative.map((value, index) => '<circle class="njc-chartdot" cx="' + x(index) + '" cy="' + y(value) + '" r="4"/><text x="' + x(index) + '" y="' + (bottom + 21) + '" text-anchor="' + (index === 0 ? 'start' : index === 3 ? 'end' : 'middle') + '">' + (index + 1) + '. Nov.</text>').join('') + '</svg>';
+        markup += cumulative.map((value, index) => '<button class="njc-chart-hit" type="button" style="left:' + x(index) + 'px;top:' + y(value) + 'px" data-day="' + index + '" aria-label="' + (index + 1) + '. November: ' + format(value) + ' Kilometer"><span class="njc-sr">' + (index + 1) + '. November</span></button>').join('');
+        chart.innerHTML = markup;
+      }
+      function render() {
+        if (chartObserver) chartObserver.disconnect();
+        root.style.maxWidth = state.layout === 'mobile' ? '390px' : 'none';
+        root.querySelector('.njc-header').innerHTML = '<div class="njc-brand"><span class="njc-mark" aria-hidden="true">N</span><div><strong>November Jogging Challenge</strong><div class="njc-sub">Gemeinsam in Bewegung</div></div></div>' +
+          (state.loggedIn ? '<div class="njc-account"><strong>Sofia · angemeldet</strong><button class="njc-textbutton" type="button" data-action="logout">Abmelden</button></div>' : '<button class="njc-button njc-login" type="button" data-action="login">Mit Strava anmelden</button>');
+        root.querySelectorAll('[data-page]').forEach(button => button.setAttribute('aria-selected', String(button.dataset.page === state.page)));
+        content.innerHTML = state.page === 'ranking' ? ranking() : state.page === 'groups' ? groups() : overview();
+        if (state.page === 'groups') root.querySelector('.njc-participants').textContent = 'Teilnehmer: Alex Runner' + (state.joined ? ', ' + state.guestName : '');
+        drawChart();
+        if (globalThis.ResizeObserver && root.querySelector('.njc-chart')) {
+          chartObserver = new ResizeObserver(drawChart);
+          chartObserver.observe(root.querySelector('.njc-chart'));
+        }
+      }
+      root.addEventListener('click', event => {
+        const button = event.target.closest('button');
+        if (!button || !root.contains(button)) return;
+        if (button.dataset.page) { state.page = button.dataset.page; render(); return; }
+        const action = button.dataset.action;
+        if (action === 'login' || action === 'logout') { state.loggedIn = action === 'login'; render(); return; }
+        if (action === 'join') {
+          if (state.joined) state.joined = false;
+          else if (state.loggedIn) { state.joined = true; state.guestName = 'Sofia Example'; }
+          else state.showJoin = true;
+          render();
+          return;
+        }
+        if (action === 'plan') {
+          root.querySelector('.njc-group-status').textContent = state.loggedIn ? 'Lauf planen: Dein Name ist vorausgefüllt. Danach Distanz, Pace, Zeitpunkt und Startpunkt.' : 'Lauf planen ist auch als Gast möglich: Name, Distanz, Pace, Zeitpunkt und Startpunkt.';
+          return;
+        }
+        if (button.dataset.km) {
+          const km = Number(button.dataset.km);
+          const person = people.find(item => item.initials === button.dataset.person);
+          const section = button.closest('section, .njc-runner-detail');
+          section.querySelectorAll('[data-km]').forEach(cell => cell.setAttribute('aria-pressed', String(cell === button)));
+          let label = cellLabel(km, person);
+          if (person.initials === 'SE' && km === 29) label = '29 km erledigt · dein 35-km-Lauf vom 1. November wurde dafür gewertet.';
+          if (person.initials === 'SE' && km === 27) label = '27 km erledigt · dein 30-km-Lauf vom 2. November wurde dafür gewertet.';
+          if (person.initials === 'SE' && km === 6) label = '6 km erledigt · dein 7-km-Lauf vom 3. November wurde dafür gewertet.';
+          section.querySelector('.njc-selection').textContent = label;
+        }
+        if (button.dataset.day !== undefined) {
+          const day = Number(button.dataset.day);
+          root.querySelector('.njc-chart-detail').textContent = (day + 1) + '. November · insgesamt ' + format(cumulative[day]) + ' Challenge-km';
+        }
+      });
+      root.addEventListener('toggle', event => {
+        if (event.target.matches('.njc-runner') && event.target.open) root.querySelectorAll('.njc-runner').forEach(row => { if (row !== event.target) row.open = false; });
+      }, true);
+      root.addEventListener('submit', event => {
+        if (!event.target.matches('.njc-guest-form')) return;
+        event.preventDefault();
+        const name = event.target.elements.guestName.value.trim();
+        if (!name) return;
+        state.guestName = name;
+        state.joined = true;
+        state.showJoin = false;
+        render();
+      });
+      render();
+      if (globalThis.Tweak) {
+        const tweak = new Tweak({ container: root, onChange: render });
+        tweak.addToggle(state, 'loggedIn', { label: 'Angemeldet' });
+        tweak.addSelect(state, 'layout', { label: 'Breite', options: [{ label: 'Automatisch', value: 'auto' }, { label: 'Mobil', value: 'mobile' }] });
+        tweak.addSelect(state, 'personalGrid', { label: 'Persönliche Feldchen', options: [{ label: 'Alle 30 wie heute', value: 'all' }, { label: 'Nur aktuelle Woche', value: 'week' }] });
+        tweak.addToggle(state, 'numbered', { label: 'Zahlen auch in Mini-Feldchen' });
+      }
+    })();
+  </script>
+</div>

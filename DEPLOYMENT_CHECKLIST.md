@@ -1,401 +1,82 @@
-# Deployment Checklist - Admin Panel + Custom Domain
-
-## 🌐 Hosting-Struktur
-
-```
-Frontend Domain: https://nvojogcha.ch (deine Custom Domain)
-  ↓ Gehostet auf Render: november-challenge-1
-  
-Backend Domain: https://november-challenge.onrender.com
-  ↓ Gehostet auf Render: november-challenge
-```
-
-## 📋 Vor dem Deployment
-
-### Code Überprüfung
-- [x] Alle Dateien erstellt:
-  - [x] `backend/routes/admin.py` (neue Admin-Routes)
-  - [x] `frontend/src/components/AdminPanel.jsx` (neue Admin-UI)
-  - [x] `frontend/src/components/AdminPanel.css` (Admin-Styling)
-
-- [x] Alle Dateien geändert:
-  - [x] `backend/models/activity.py` (+ is_manual Spalte)
-  - [x] `backend/database.py` (+ ensure_is_manual_column Funktion)
-  - [x] `backend/main.py` (+ admin_router Import & CORS Update)
-  - [x] `backend/auth/routes.py` (+ Strava-Skip-Logik für manuelle Einträge)
-  - [x] `frontend/src/App.jsx` (+ Admin-Page-Routing)
-  - [x] `frontend/vite.config.js` (+ /admin Proxy)
-
-### Environment Setup (KRITISCH!)
-
-**In Render Backend Service Environment-Variablen:**
-
-1. Gehe zu: **Render Dashboard → Backend Service → Environment**
-2. Füge/Update folgende Variablen hinzu:
-   ```
-   ADMIN_PASSWORD=your_super_secret_password_here
-   CUSTOM_DOMAIN=https://nvojogcha.ch
-   FRONTEND_URL=https://november-challenge-1.onrender.com
-   ```
-
-**Beispiel mit echten Werten:**
-```
-ADMIN_PASSWORD=N0v3mb3r!Ch4ll3ng3@2024
-CUSTOM_DOMAIN=https://nvojogcha.ch
-FRONTEND_URL=https://november-challenge-1.onrender.com
-```
-
-⚠️ **WICHTIG:**
-- `ADMIN_PASSWORD`: Starkes Passwort! (mind. 16 Zeichen, Zahlen + Sonderzeichen)
-- `CUSTOM_DOMAIN`: Genau https://nvojogcha.ch (mit https:// und ohne Slash am Ende)
-- Nach dem Speichern wird Backend automatisch neu gestartet
-
-## 🚀 Deployment Steps
-
-### 1. Backend Deployment
-
-```bash
-# Im Backend-Verzeichnis
-git add .
-git commit -m "Add Admin Panel with manual activity management & CORS update"
-git push
-```
-
-Render wird automatisch deployed. Warte bis Status grün ist.
-
-**Nach Deploy prüfen:**
-```bash
-curl https://november-challenge.onrender.com/admin/login
-# Sollte 401 Unauthorized zurückgeben (normal - Token erforderlich)
-```
-
-### 2. Frontend Deployment
-
-```bash
-# Im Frontend-Verzeichnis
-git add .
-git commit -m "Add Admin Panel UI and routing"
-git push
-```
-
-Render wird automatisch deployed.
-
-### 3. Custom Domain konfigurieren
-
-**In Render Dashboard:**
-
-1. Klick auf Frontend Service: `november-challenge-1`
-2. Gehe zu **Settings → Custom Domains**
-3. Klick **Add Custom Domain**
-4. Eingabe: `nvojogcha.ch`
-5. Render zeigt einen CNAME Record:
-   ```
-   Type: CNAME
-   Name: nvojogcha.ch
-   Value: cname.onrender.com (oder ähnlich)
-   ```
-
-**Bei deinem DNS-Provider (z.B. Namecheap, GoDaddy, etc.):**
-
-1. Gehe zu deinen DNS-Settings für `nvojogcha.ch`
-2. Erstelle/Update CNAME Record:
-   ```
-   Name: nvojogcha.ch
-   Type: CNAME
-   Value: cname.onrender.com (vom Render kopieren!)
-   TTL: 3600
-   ```
-3. Speichern
-
-⏱️ DNS braucht 15-30 Min um aktiv zu werden!
-
-### 4. SSL-Zertifikat
-
-Render erstellt automatisch SSL-Zertifikat:
-- Dauert ~5 Min nach CNAME-Setup
-- Wird automatisch erneuert
-- Keine weitere Action nötig
-
-### 5. Testen
-
-**Test 1: Frontend erreichbar unter Custom Domain**
-```
-Öffne: https://nvojogcha.ch
-→ sollte Dashboard anzeigen
-```
-
-**Test 2: Admin-Panel erreichbar**
-```
-Öffne: https://nvojogcha.ch/admin
-→ sollte Login-Seite anzeigen
-```
-
-**Test 3: Login funktioniert**
-```
-1. Gib ADMIN_PASSWORD ein
-2. Klick Login
-→ sollte Admin-Panel anzeigen
-```
-
-**Test 4: Spieler verwalten**
-```
-1. Tab "Users"
-2. Name eingeben (z.B. "Test Player")
-3. Klick "Add Player"
-→ sollte neue Spieler-Karte zeigen
-```
-
-**Test 5: Aktivität hinzufügen**
-```
-1. Tab "Activities"
-2. Spieler wählen
-3. Date: 2024-11-15
-4. Distance: 5.5 km
-5. Klick "Add Activity"
-→ sollte in Tabelle erscheinen
-```
-
-**Test 6: Browser Console (F12) - Keine Fehler**
-```
-CORS-Fehler? → CUSTOM_DOMAIN nicht richtig gesetzt
-Login-Fehler? → ADMIN_PASSWORD falsch
-404 Fehler? → Backend nicht erreichbar
-```
-
-## 📊 Verification
-
-Render Logs überprüfen:
-
-**Backend Logs:**
-```
-1. Render Dashboard → Backend Service
-2. Klick auf "Logs"
-3. Suche nach "CORS allowed origins"
-4. sollte zeigen: [https://nvojogcha.ch, ...]
-```
-
-**Frontend Logs:**
-```
-1. Render Dashboard → Frontend Service
-2. Klick auf "Logs"
-3. sollte "Build successful" zeigen
-```
-
-## 🔧 Häufige Probleme & Lösungen
-
-| Problem | Ursache | Lösung |
-|---------|--------|--------|
-| CORS Error (Admin-Panel) | `CUSTOM_DOMAIN` nicht in Backend Env | Render → Backend → Environment → CUSTOM_DOMAIN=https://nvojogcha.ch |
-| Login fehlgeschlagen | `ADMIN_PASSWORD` falsch/nicht gesetzt | Render → Backend → Environment → ADMIN_PASSWORD überprüfen |
-| Domain zeigt "Service Offline" | DNS noch nicht propagiert | 15-30 Min warten, Browser Cache leeren |
-| SSL-Zertifikat Fehler | CNAME Record falsch | Bei DNS-Provider überprüfen: nvojogcha.ch CNAME → cname.onrender.com |
-| "localhost" in Logs | Frontend hat falsche API-URL | vite.config.js überprüfen: sollte "" sein |
-| Strava überschreibt Manuelle | Alte Backend-Version | Backend neu deployen, Logs überprüfen |
-
-## 📋 Final Checklist vor Production
-
-### Code
-- [ ] Alle Dateien committed & gepusht
-- [ ] Keine console.log() Debug-Ausgaben
-- [ ] Keine TODO-Kommentare
-
-### Backend Konfiguration
-- [ ] `ADMIN_PASSWORD` gesetzt (starkes Passwort)
-- [ ] `CUSTOM_DOMAIN=https://nvojogcha.ch`
-- [ ] `FRONTEND_URL=https://november-challenge-1.onrender.com`
-- [ ] `DATABASE_URL` konfiguriert (Postgres)
-- [ ] Backend neu deployed nach Env-Änderungen
-
-### Frontend Konfiguration
-- [ ] Custom Domain `nvojogcha.ch` in Render konfiguriert
-- [ ] Frontend neu deployed
-- [ ] vite.config.js hat `/admin` Proxy
-
-### DNS & Domain
-- [ ] CNAME Record bei DNS-Provider erstellt
-- [ ] nvojogcha.ch zeigt auf Render
-- [ ] DNS propagiert (überprüf mit `nslookup`)
-- [ ] SSL-Zertifikat aktiv (grünes Schloss)
-
-### Testing
-- [ ] Dashboard unter https://nvojogcha.ch erreichbar
-- [ ] Admin-Panel unter https://nvojogcha.ch/admin erreichbar
-- [ ] Login funktioniert mit ADMIN_PASSWORD
-- [ ] Keine CORS-Fehler in Browser Console
-- [ ] Spieler können hinzugefügt werden
-- [ ] Aktivitäten können verwaltet werden
-- [ ] Strava-Sync lädt neue Aktivitäten
-
-### Dokumentation
-- [ ] ADMIN_PANEL_SETUP.md gelesen
-- [ ] IMPLEMENTATION_SUMMARY.md verstanden
-- [ ] Passwort sicher gespeichert
-
-## 🎉 Go Live!
-
-Wenn alle Punkte abgehakt:
-```
-✅ Frontend: https://nvojogcha.ch
-✅ Admin-Panel: https://nvojogcha.ch/admin
-✅ Backend: https://november-challenge.onrender.com
-✅ Datenbank: Automatische Migrationen
-✅ SSL/HTTPS: Aktiv
-```
-
----
-
-## 📞 Emergency Support
-
-Wenn etwas beim Deploy schiefgeht:
-
-1. **Render Logs überprüfen**:
-   - Backend → Logs → Fehler suchen
-   - Frontend → Logs → Build-Fehler?
-
-2. **Browser Console (F12)**:
-   - Netzwerk-Tab → Request anschauen
-   - Fehler-Meldungen kopieren
-
-3. **Curl testen**:
-   ```bash
-   # Backend erreichbar?
-   curl https://november-challenge.onrender.com/admin/login
-   
-   # Frontend erreichbar?
-   curl https://nvojogcha.ch
-   
-   # DNS korrekt?
-   nslookup nvojogcha.ch
-   ```
-
-4. **Rollback**:
-   - Render → Deployments
-   - Wähle letztes bekannt funktionierendes Deployment
-   - Klick "Roll back"
-````
-- [ ] Login-Seite sollte sichtbar sein
-- [ ] Passwort-Input sollte funktionieren
-
-### Test 2: Admin Login
-- [ ] Gib das Passwort ein (das du in Env gesetzt hast)
-- [ ] Klick "Login"
-- [ ] Dashboard sollte laden
-
-### Test 3: Spieler Management
-- [ ] Tab "Users" öffnen
-- [ ] "Add New Player" - Namen eingeben, hinzufügen
-- [ ] Neuer Spieler sollte in der Liste erscheinen
-- [ ] "Edit Activities" Button klicken → sollte zu Activities-Tab gehen
-
-### Test 4: Aktivitäts Management
-- [ ] Tab "Activities" öffnen
-- [ ] Spieler wählen
-- [ ] Datum & Distanz eingeben
-- [ ] "Add Activity" klicken
-- [ ] Aktivität sollte in der Tabelle erscheinen
-- [ ] Type sollte "Manual" sein
-
-### Test 5: Strava-Integration
-- [ ] Dashboard laden (nicht im Admin)
-- [ ] `POST /users/sync_all` wird aufgerufen
-- [ ] Überprüfe in Render Logs:
-  ```
-  "Skipping Strava activity (manual entry exists)"
-  ```
-  - Sollte nur erscheinen, wenn man an demselben Tag eine manuelle Aktivität hat
-- [ ] Manuelle Einträge sollten NICHT gelöscht werden
-
-### Test 6: Delete Funktionen
-- [ ] Manuelle Aktivität löschen → sollte funktionieren
-- [ ] Score & Slots sollten rückgängig gemacht werden
-- [ ] Spieler löschen → sollte funktionieren (mit Bestätigung)
-
-### Test 7: Logout
-- [ ] Klick "Logout" Button
-- [ ] Sollte zur Login-Seite gehen
-- [ ] Login nötig um weiter zu machen
-
-## 🔍 Debugging
-
-### Wenn Admin-Panel nicht funktioniert:
-
-**Fehler: "Admin token required"**
-```bash
-# 1. Überprüfe ADMIN_PASSWORD in Render Env
-# 2. Backend neu deployen
-# 3. Browser Cache leeren (Strg+Shift+Del)
-```
-
-**Fehler: Login fehlgeschlagen**
-```bash
-# 1. Überprüfe Render Logs (Analytics → Logs)
-# 2. Achte auf Passwort-Großschreibung
-# 3. Prüfe: ADMIN_PASSWORD ohne extra Spaces
-```
-
-**Aktivitäten können nicht hinzugefügt werden**
-```bash
-# 1. Render Backend Logs prüfen
-# 2. Überprüfe: Spieler ID existiert?
-# 3. Datum-Format: YYYY-MM-DD
-# 4. Distance: Positive Zahl erlaubt
-```
-
-**Strava überschreibt manuelle Einträge**
-```bash
-# 1. Backend neu deployen
-# 2. Database-Migration überprüfen (is_manual Spalte existiert?)
-# 3. Alte Aktivitäten löschen & neu hinzufügen
-```
-
-### Logs prüfen
-
-**Render Backend Logs:**
-```
-Dashboard → Backend Service → Logs
-```
-
-Wichtige Log-Einträge:
-```
-"Adding 'is_manual' column" → Migration läuft
-"Skipping Strava activity" → Manuelle Priorität funktioniert
-"Activity created" → Neue Aktivität gespeichert
-"Invalid or expired admin token" → Token-Problem
-```
-
-## 📝 Nach Deployment
-
-### Dokumentation
-- [x] `ADMIN_PANEL_SETUP.md` - Detaillierte Anleitung
-- [x] `IMPLEMENTATION_SUMMARY.md` - Technische Details
-- [x] Diese Checkliste
-
-### Erste Nutzung
-1. Admin-Panel öffnen: `/admin`
-2. Mit Passwort anmelden
-3. Alle Spieler hinzufügen
-4. Pro Spieler die ersten Aktivitäten manuell hinzufügen
-5. Strava wird bei Dashboard-Load automatisch synced
-
-## 🎯 Wichtige Punkte
-
-| Punkt | Wichtig | Status |
-|-------|---------|--------|
-| `ADMIN_PASSWORD` in Render Env | ⚠️ KRITISCH | [ ] Gesetzt |
-| Backend neu deployed | ✅ | [ ] Gemacht |
-| Frontend neu deployed | ✅ | [ ] Gemacht |
-| Admin-Panel erreichbar | ✅ | [ ] Getestet |
-| Login funktioniert | ✅ | [ ] Getestet |
-| Spieler hinzufügbar | ✅ | [ ] Getestet |
-| Aktivitäten hinzufügbar | ✅ | [ ] Getestet |
-| Strava-Skip funktioniert | ✅ | [ ] Getestet |
-
-## ✨ Fertig!
-
-Wenn alle Checkboxen abhaken kannst, ist das Admin-Panel produktiv bereit! 🎉
-
-**Fragen oder Probleme?** Schau in die Log-Dateien in Render oder überprüfe die `ADMIN_PANEL_SETUP.md`.
-
----
-
-**Viel Erfolg mit dem Admin-Panel!** 🚀
+# Bestehende Render-Dienste aktualisieren
+
+Die vorhandene Struktur bleibt erhalten: **frontend** als Static Site, **backend** als Docker-Web-Service, **database** als PostgreSQL. Es werden keine neuen Render-Dienste benötigt. Die folgenden Einstellungen sind vorbereitet; DNS und Render müssen im jeweiligen Konto gesetzt werden.
+
+## 1. API unter derselben Hauptdomain erreichbar machen
+
+Frontend: `https://www.novjogcha.ch` · Backend: **`https://api.novjogcha.ch`**.
+
+Damit liegen beide Dienste für Browser-Cookies auf derselben Site. Eine fremde `onrender.com`-API neben `novjogcha.ch` ist für zuverlässige Anmeldung mit `SameSite=Lax` ungeeignet. Der Code verwendet absichtlich keine Strava-Tokens im Browser als Ausweichlösung.
+
+Im bestehenden Backend-Service unter **Settings → Custom Domains** `api.novjogcha.ch` hinzufügen. Beim DNS-Anbieter den von Render angegebenen CNAME-Zielwert eintragen (den tatsächlichen bestehenden Backend-Host verwenden, keine URL mit `https://`). Danach in Render verifizieren. Render stellt das TLS-Zertifikat bereit. Anleitung: [Render Custom Domains](https://render.com/docs/custom-domains).
+
+## 2. Backend-Umgebungsvariablen
+
+| Variable | Wert / Zweck |
+| --- | --- |
+| `DATABASE_URL` | **Internal Database URL** der bestehenden PostgreSQL-Datenbank in derselben Render-Region, unverändert übernehmen |
+| `REQUIRE_POSTGRES` | `1` |
+| `FRONTEND_URL` | `https://www.novjogcha.ch` |
+| `CUSTOM_DOMAIN` | `https://novjogcha.ch` |
+| `COOKIE_SECURE` | `1` |
+| `FORWARDED_ALLOW_IPS` | `*` hinter dem Render-Proxy, damit HTTPS und Client-IP korrekt erkannt werden |
+| `CHALLENGE_YEAR` | `2026` |
+| `ADMIN_PASSWORD` | Eigenes starkes Passwort, nur als geheime Render-Variable |
+| `STRAVA_CLIENT_ID` | Bestehende Strava-App |
+| `STRAVA_CLIENT_SECRET` | Geheimnis dieser App, nur im Backend |
+| `STRAVA_REDIRECT_URI` | `https://api.novjogcha.ch/auth/callback` |
+| `ENABLE_BACKGROUND_SYNC` | `1` |
+| `ENABLE_DEBUG_ROUTES` | `0` |
+| `LOAD_ENV_FILE` | `0` |
+| `ALLOWED_ORIGINS` | Optional weitere vollständige Frontend-Ursprünge, durch Kommas getrennt |
+
+Kein `ALLOW_SQLITE_FALLBACK` und keine geschätzte externe PostgreSQL-Adresse nötig. Eine falsche produktive Datenbankverbindung führt zu `/healthz` = 503, statt still eine leere lokale Datenbank anzulegen.
+
+Docker-Konfiguration: Bei Repository-Root als Build Context den Root-`Dockerfile` verwenden; bei Root Directory `backend` den dortigen `Dockerfile`. Beide starten Uvicorn auf `0.0.0.0` und übernehmen Render-`PORT`. **Health Check Path: `/healthz`**. Siehe [Render Web Services](https://render.com/docs/web-services).
+
+`FORWARDED_ALLOW_IPS=*` ist für den Betrieb hinter Render gedacht. Lokal bleibt der Uvicorn-Standard `127.0.0.1`; beim direkten öffentlichen Betrieb nur tatsächlich vertrauenswürdige Proxy-Adressen erlauben. Die korrekte Client-IP verhindert, dass die Begrenzung für Gast-Anfragen alle Teilnehmer gemeinsam trifft. [FastAPI hinter einem Proxy](https://fastapi.tiangolo.com/advanced/behind-a-proxy/).
+
+Vor dem ersten produktiven Update einen aktuellen Datenbank-Backup/Snapshot erstellen. Beim Start läuft eine additive, versionierte Migration innerhalb einer Transaktion; PostgreSQL-Sperren schützen parallele Starts. Neue Tabellen speichern Wochenwertung, Sitzungen und Läufergruppen. Historische `users.slots`, `users.total_score`, Aktivitäten und `claims` bleiben erhalten. Manuell falsch gesetzte alte Strava-IDs müssen numerisch sein oder vorab korrigiert werden. Die Anwendung erzeugt keine neue verwaltete Datenbank.
+
+## 3. Strava-App konfigurieren
+
+In den Einstellungen der bestehenden Strava-App die **Authorization Callback Domain** auf `api.novjogcha.ch` setzen und die oben genannte Redirect-URI verwenden. Mit dem neuen Login bleibt die Website-Sitzung 90 Tage gültig und wird bei Nutzung in den letzten 30 Tagen verlängert. Cookies sind `Secure`, `HttpOnly`, `SameSite=Lax` und an den Backend-Host gebunden. Strava-Zugangstokens werden im Backend erneuert; sie sind nicht der Website-Login. Nach der Umstellung ist einmaliges erneutes Anmelden nötig. Browser, die Cookies löschen, benötigen weiterhin eine neue Anmeldung. Strava-Dokumentation: [OAuth und Token-Erneuerung](https://developers.strava.com/docs/authentication/).
+
+## 4. Frontend konfigurieren
+
+Im bestehenden Static-Site-Service:
+
+| Einstellung | Wert |
+| --- | --- |
+| Root Directory | `frontend` |
+| Build Command | `npm ci && npm run build` |
+| Publish Directory | `dist` |
+| `VITE_API_BASE_URL` | `https://api.novjogcha.ch` |
+| `VITE_UI_PREVIEW` | `false` bzw. nicht setzen |
+
+Die eingecheckte `.env.production` enthält ebenfalls diese API-Adresse. Eine eventuell bisher in Render gesetzte alte API-Adresse **überschreiben**, da Render-Variablen Vorrang haben. Nach Änderung neu bauen; Vite-Werte werden beim Build eingebettet.
+
+Unter **Redirects/Rewrites** eine **Rewrite**-Regel setzen: Source `/*`, Destination `/index.html`, Action `Rewrite`. Dadurch funktioniert der direkte Aufruf von `/admin`. Das vorhandene `_redirects` allein konfiguriert Render nicht. [Render Static Sites](https://render.com/docs/static-sites).
+
+Optional anderer Kartenanbieter: `VITE_MAP_TILE_URL` mit `{z}/{x}/{y}` und passende `VITE_MAP_ATTRIBUTION`. Der Standard zeigt OpenStreetMap mit Quellenangabe. Für die Karte ist kein Strava-Login nötig.
+
+## 5. Webhook optional aktualisieren
+
+Der periodische vollständige Import läuft alle 30 Minuten und gleicht auch Änderungen/Löschungen ab. Für schnellere Aktualisierung Strava-Webhooks verwenden:
+
+1. `STRAVA_WEBHOOK_VERIFY_TOKEN` im Backend als selbst gewähltes Geheimnis setzen.
+2. Die vorhandene Subscription prüfen. Falls ihr Callback noch auf dem bisherigen Backend-Host liegt, diese nach der Strava-Anleitung auf `https://api.novjogcha.ch/auth/webhook` umstellen. Pro Strava-App ist nur eine Subscription möglich; bestehende nicht blind duplizieren.
+3. Die zurückgegebene ID als `STRAVA_WEBHOOK_SUBSCRIPTION_ID` setzen. Ohne diese ID nimmt der POST-Endpunkt keine Ereignisse entgegen; der periodische Import bleibt aktiv.
+
+GET-Verifikation liefert JSON mit `hub.challenge`. POST-Ereignisse werden zuerst bestätigt und danach im Hintergrund verarbeitet. Die Aktivität wird mit den echten Strava-Zugangsdaten geprüft. [Strava Webhooks](https://developers.strava.com/docs/webhooks/).
+
+## 6. Nach dem Deployment prüfen
+
+- `https://api.novjogcha.ch/healthz` meldet `ok`.
+- Öffentliche Übersicht lädt ohne Anmeldung; Rangliste und Kilometerkurve sind konsistent.
+- Strava-Anmeldung → persönliche Feldchen → Seite neu laden → weiterhin angemeldet. In einem zweiten Tab ebenfalls prüfen.
+- `/admin` direkt aufrufen und anmelden; Abschlussdistanz setzen; Auslosung als Entwurf speichern. Öffentlich bleibt sie verborgen. Erst am gewünschten Tag veröffentlichen.
+- Als Gast einen Lauf mit Kartenpunkt erstellen; in anderem Browser teilnehmen. Im ursprünglichen Browser bleiben Bearbeiten/Absagen nach Neuladen verfügbar.
+- Auf Handy prüfen: drei Reiter, kompakte Rangliste, aufklappbare Details, Kartenpunkt und Formular.
+
+Echte Strava-Autorisierung, Render-DNS/TLS und die produktive Migration lassen sich erst nach diesen Kontoeinstellungen abschliessend prüfen. Lokale Tests verändern diese Systeme nicht.
