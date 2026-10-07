@@ -1,6 +1,76 @@
 import React, { useEffect, useState } from "react";
 import { api, errorText, isPreview } from "../api";
-import { localInput, runDate } from "../time";
+import { localInput, runDate, challengeDate } from "../time";
+import TestNotice from "./TestNotice";
+
+function TestCalendarEditor({ config, busy, onSave }) {
+  const [start, setStart] = useState(config.starts_on);
+  const [days, setDays] = useState(
+    config.periods.map(
+      (p) =>
+        Math.round(
+          (Date.parse(p.ends_on) - Date.parse(p.starts_on)) / 86400000,
+        ) + 1,
+    ),
+  );
+  const locked = config.periods.some((p) => p.published);
+  return (
+    <form
+      className="test-calendar"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave({ starts_on: start, period_days: days.map(Number) });
+      }}
+    >
+      <h3>Testkalender</h3>
+      <p className="muted">
+        Vor der ersten Veröffentlichung festlegen. Der Abschlusslauf ist am Tag
+        nach dem vierten Zeitraum. Kürzere Zeiträume erlauben einen schnellen
+        Test von Wochenwechsel und Finale; pro Tag zählt weiterhin nur ein Lauf.
+      </p>
+      <div className="form-grid">
+        <label>
+          Beginn des Tests
+          <input
+            type="date"
+            required
+            min={`${config.year}-01-01`}
+            max={`${config.year}-12-27`}
+            value={start}
+            disabled={locked || busy}
+            onChange={(e) => setStart(e.target.value)}
+          />
+        </label>
+        {days.map((value, index) => (
+          <label key={index}>
+            Tage im Zeitraum {index + 1}
+            <input
+              type="number"
+              min="1"
+              max="31"
+              step="1"
+              required
+              value={value}
+              disabled={locked || busy}
+              onChange={(e) =>
+                setDays(days.map((n, i) => (i === index ? e.target.value : n)))
+              }
+            />
+          </label>
+        ))}
+      </div>
+      {locked ? (
+        <p className="muted">
+          Testkalender gesperrt: Eine Auslosung wurde bereits veröffentlicht.
+        </p>
+      ) : (
+        <button className="btn" disabled={busy}>
+          Testkalender speichern
+        </button>
+      )}
+    </form>
+  );
+}
 
 function DrawEditor({ period, onSave, busy, finale }) {
   const [value, setValue] = useState(period.draft_distances.join(", "));
@@ -167,6 +237,7 @@ export default function AdminPanel() {
           </button>
         )}
       </div>
+      <TestNotice config={data?.config} />
       {error && (
         <p role="alert" className="notice error">
           {error}
@@ -220,6 +291,21 @@ export default function AdminPanel() {
           ) : tab === "challenge" ? (
             <>
               <h2>Challenge {data.config.year}</h2>
+              {data.config.test_mode && (
+                <TestCalendarEditor
+                  key={`${data.config.starts_on}-${data.config.finale_date}-${data.config.periods.map((p) => p.ends_on).join()}`}
+                  config={data.config}
+                  busy={busy}
+                  onSave={(body) =>
+                    mutate(
+                      "/admin/challenge/test-calendar",
+                      "PUT",
+                      body,
+                      "Testkalender gespeichert. Strava anschliessend erneut synchronisieren.",
+                    )
+                  }
+                />
+              )}
               <p>
                 Trage die Ergebnisse eurer Auslosung ein. Entwürfe sieht nur der
                 Admin; mit «Veröffentlichen» erscheinen die Distanzen für alle.
@@ -238,7 +324,8 @@ export default function AdminPanel() {
                 }}
               >
                 <label>
-                  Abschlusslauf am 30.11. · Distanz in km
+                  Abschlusslauf am {challengeDate(data.config.finale_date)} ·
+                  Distanz in km
                   <input
                     type="number"
                     min="1"
@@ -361,7 +448,7 @@ export default function AdminPanel() {
                 <h2>Aktivitäten und Korrekturen</h2>
                 <button
                   className="btn small"
-                  disabled={busy}
+                  disabled={busy || data.config.strava_sync_enabled === false}
                   onClick={() =>
                     mutate(
                       "/admin/sync",
@@ -374,6 +461,12 @@ export default function AdminPanel() {
                   Strava abrufen
                 </button>
               </div>
+              {data.config.strava_sync_enabled === false && (
+                <p className="notice">
+                  Strava-Abrufe sind auf dieser Seite pausiert. In Render
+                  STRAVA_SYNC_ENABLED auf 1 setzen, um sie wieder zu aktivieren.
+                </p>
+              )}
               <p className="notice">
                 Eine manuelle Tageskorrektur ersetzt die Strava-Wertung dieses
                 Tages. Beim Löschen der Korrektur zählt wieder der längste
@@ -417,10 +510,16 @@ export default function AdminPanel() {
                   <input
                     required
                     type="date"
+                    min={
+                      data.config.starts_on || data.config.periods[0].starts_on
+                    }
                     max={
                       isPreview
-                        ? undefined
-                        : localInput(Date.now()).slice(0, 10)
+                        ? data.config.finale_date
+                        : [
+                            data.config.finale_date,
+                            localInput(Date.now()).slice(0, 10),
+                          ].sort()[0]
                     }
                     value={activity.date}
                     onChange={(e) =>

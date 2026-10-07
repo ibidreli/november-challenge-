@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey, JSON, UniqueConstraint, CheckConstraint
+from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey, JSON, UniqueConstraint, CheckConstraint, Boolean, false
 from database import Base
 
 class ChallengeEdition(Base):
@@ -7,6 +7,8 @@ class ChallengeEdition(Base):
     year = Column(Integer, unique=True, nullable=False)
     timezone = Column(String(50), nullable=False, default="Europe/Zurich")
     finale_km = Column(Integer, nullable=False, default=15)
+    is_test = Column(Boolean, nullable=False, default=False, server_default=false())
+    finale_on = Column(Date, nullable=True)
 
 class ChallengePeriod(Base):
     __tablename__ = "challenge_periods"

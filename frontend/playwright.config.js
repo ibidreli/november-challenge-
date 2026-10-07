@@ -38,6 +38,11 @@ export default defineConfig({
       testMatch: /integration\.spec\.js/,
       use: { ...devices["Desktop Chrome"], baseURL: "http://localhost:5179" },
     },
+    {
+      name: "october",
+      testMatch: /october\.spec\.js/,
+      use: { ...devices["Desktop Chrome"], baseURL: "http://localhost:5180" },
+    },
   ],
   webServer: [
     {
@@ -59,6 +64,23 @@ export default defineConfig({
         VITE_API_BASE_URL: "",
       },
       url: "http://localhost:5179",
+      reuseExistingServer: false,
+    },
+    {
+      command: `"${python}" ../backend/tests/serve_e2e.py`,
+      env: { E2E_OCTOBER: "1" },
+      url: "http://localhost:8022/healthz",
+      reuseExistingServer: false,
+      timeout: 30000,
+    },
+    {
+      command: "npx vite --mode test --port 5180",
+      env: {
+        VITE_API_PROXY_TARGET: "http://localhost:8022",
+        VITE_UI_PREVIEW: "false",
+        VITE_API_BASE_URL: "",
+      },
+      url: "http://localhost:5180",
       reuseExistingServer: false,
     },
   ],

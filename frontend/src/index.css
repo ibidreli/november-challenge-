@@ -1017,6 +1017,24 @@ th {
   border-radius: 7px;
   margin-top: 18px;
 }
+.test-banner {
+  background: #fff8df;
+  color: #786525;
+  border: 1px solid #e9d99b;
+}
+.test-banner strong,
+.test-banner span {
+  display: block;
+}
+.test-calendar {
+  padding: 20px;
+  margin: 20px 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.test-calendar > .btn {
+  margin-top: 18px;
+}
 .skip-link {
   position: fixed;
   top: 12px;

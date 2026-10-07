@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { challengeDate } from "../time";
 
 export default function ChallengeStats({ stats, config }) {
   const [selected, setSelected] = useState(null);
@@ -14,10 +15,28 @@ export default function ChallengeStats({ stats, config }) {
   const points = stats.points.filter((p) => !p.future);
   const shown = points.length
     ? points
-    : [{ date: `${config.year}-11-01`, total_km: 0, daily_km: 0 }];
+    : [
+        {
+          date: config.starts_on || config.periods[0].starts_on,
+          total_km: 0,
+          daily_km: 0,
+        },
+      ];
+  const indices = new Map(stats.points.map((p, i) => [p.date, i]));
+  const xPosition = (day) =>
+    48 +
+    ((indices.get(day) || 0) / Math.max(1, stats.points.length - 1)) *
+      (width - 80);
+  const ticks = [
+    ...new Set([
+      shown[0].date,
+      ...config.periods.slice(0, 3).map((p) => p.ends_on),
+      config.finale_date,
+    ]),
+  ];
   const maximum = Math.max(...shown.map((p) => p.total_km), 10);
   const position = (p) => [
-    48 + ((Number(p.date.slice(-2)) - 1) / 29) * (width - 80),
+    xPosition(p.date),
     200 - (p.total_km / maximum) * 160,
   ];
   const line = shown
@@ -43,8 +62,9 @@ export default function ChallengeStats({ stats, config }) {
       </p>
       {!points.length && (
         <p className="notice">
-          Am 1. November geht’s los. Hier wächst dann unsere gemeinsame
-          Kilometerkurve.
+          Am{" "}
+          {challengeDate(config.starts_on || config.periods[0].starts_on, true)}{" "}
+          geht’s los. Hier wächst dann unsere gemeinsame Kilometerkurve.
         </p>
       )}
       <svg
@@ -52,7 +72,7 @@ export default function ChallengeStats({ stats, config }) {
         ref={chart}
         viewBox={`0 0 ${width} 245`}
         role="img"
-        aria-label={`Gemeinsame gewertete Kilometer im November: ${stats.total_km} Kilometer`}
+        aria-label={`Gemeinsame gewertete Kilometer der Challenge: ${stats.total_km} Kilometer`}
       >
         <defs>
           <linearGradient id="chart-fill" x1="0" y1="0" x2="0" y2="1">
@@ -86,14 +106,9 @@ export default function ChallengeStats({ stats, config }) {
           strokeLinejoin="round"
           strokeLinecap="round"
         />
-        {[1, 8, 15, 22, 30].map((day) => (
-          <text
-            key={day}
-            x={48 + ((day - 1) / 29) * (width - 80)}
-            y="228"
-            textAnchor="middle"
-          >
-            {day}.11.
+        {ticks.map((day) => (
+          <text key={day} x={xPosition(day)} y="228" textAnchor="middle">
+            {challengeDate(day)}
           </text>
         ))}
         {points.map((p) => (
@@ -126,7 +141,7 @@ export default function ChallengeStats({ stats, config }) {
       </svg>
       <div className="chart-caption" aria-live="polite">
         {points.length
-          ? `${Number(active.date.slice(-2))}. November: ${active.total_km} km gesamt · +${active.daily_km} km an diesem Tag`
+          ? `${challengeDate(active.date, true)}: ${active.total_km} km gesamt · +${active.daily_km} km an diesem Tag`
           : "Die Kurve zeigt die Summe aller gewerteten Challenge-Kilometer."}
       </div>
     </section>

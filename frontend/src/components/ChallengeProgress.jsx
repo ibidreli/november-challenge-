@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { challengeDate } from "../time";
 
 export function cellDescription(c) {
   if (c.status === "completed")
@@ -9,7 +10,7 @@ export function cellDescription(c) {
     scheduled: "kommender Zeitraum",
     upcoming: "noch nicht ausgelost",
   }[c.status];
-  return `${c.km} km: ${status}${c.finale ? " · Abschlusslauf am 30.11." : c.period ? ` · Woche ${c.period}` : ""}`;
+  return `${c.km} km: ${status}${c.finale ? ` · Abschlusslauf${c.finale_date ? ` am ${challengeDate(c.finale_date)}` : ""}` : c.period ? ` · Woche ${c.period}` : ""}`;
 }
 export function MiniGrid({ cells }) {
   return (

@@ -1,6 +1,6 @@
 """One deterministic scorer for imports, webhooks and admin corrections."""
 import os
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -8,6 +8,7 @@ from models.user import User
 from models.activity import Activity
 from models.challenge import ChallengeEdition, ChallengePeriod, DistanceTarget, ChallengeClaim
 from services.time import local_today, utcnow, iso_utc
+from services.schedule import CAPACITIES, ScheduleConfigurationError, test_mode_enabled, initial_calendar, calendar, bounds, finale_date
 
 def edition(db, lock=False):
     query = select(ChallengeEdition).where(ChallengeEdition.year == int(os.getenv("CHALLENGE_YEAR", "2026")))
@@ -20,21 +21,23 @@ def edition(db, lock=False):
 
 def seed(db):
     year = int(os.getenv("CHALLENGE_YEAR", "2026"))
-    if db.scalar(select(ChallengeEdition).where(ChallengeEdition.year == year)):
-        return
+    is_test = test_mode_enabled()
+    spans, finale = initial_calendar(year, is_test)
     # The migration lock also protects initial edition creation on concurrent starts.
     if db.bind.dialect.name == "postgresql":
         from sqlalchemy import text
         db.execute(text("SELECT pg_advisory_xact_lock(2026100701)"))
-        if db.scalar(select(ChallengeEdition).where(ChallengeEdition.year == year)):
-            return
-    e = ChallengeEdition(year=year, finale_km=15)
+    existing = db.scalars(select(ChallengeEdition)).all()
+    if any(bool(e.is_test) != is_test for e in existing):
+        raise ScheduleConfigurationError("Test and production editions require separate databases. Check DATABASE_URL and CHALLENGE_TEST_MODE.")
+    if any(e.year == year for e in existing):
+        return
+    e = ChallengeEdition(year=year, finale_km=15, is_test=is_test, finale_on=finale)
     db.add(e)
     db.flush()
-    for n, (start, end, count) in enumerate(((1, 8, 8), (9, 15, 7), (16, 22, 7), (23, 29, 7)), 1):
-        db.add(ChallengePeriod(edition_id=e.id, number=n, starts_on=date(year, 11, start),
-            ends_on=date(year, 11, end), draw_on=date(year, 11, start) - timedelta(days=1),
-            capacity=count, draft_distances=[]))
+    for n, ((start, end), count) in enumerate(zip(spans, CAPACITIES), 1):
+        db.add(ChallengePeriod(edition_id=e.id, number=n, starts_on=start,
+            ends_on=end, draw_on=start - timedelta(days=1), capacity=count, draft_distances=[]))
     db.add(DistanceTarget(edition_id=e.id, km=15))
     db.commit()
 
@@ -44,8 +47,11 @@ def periods(db, e):
 def configuration(db, admin=False):
     e = edition(db)
     today = local_today()
+    first, last = bounds(db, e)
     result = {"year": e.year, "timezone": e.timezone, "finale_km": e.finale_km,
-              "finale_date": date(e.year, 11, 30).isoformat(), "server_date": today.isoformat(),
+              "test_mode": bool(e.is_test), "starts_on": first.isoformat(),
+              "strava_sync_enabled": os.getenv("STRAVA_SYNC_ENABLED", "1") == "1",
+              "finale_date": last.isoformat(), "server_date": today.isoformat(),
               "server_now": iso_utc(utcnow()), "periods": []}
     for p in periods(db, e):
         item = {"number": p.number, "starts_on": p.starts_on.isoformat(), "ends_on": p.ends_on.isoformat(),
@@ -70,7 +76,7 @@ def rebuild_user(db, user_id, e=None):
     e, user = lock_user(db, user_id, e)
     ps = periods(db, e)
     targets = db.scalars(select(DistanceTarget).where(DistanceTarget.edition_id == e.id)).all()
-    first, last = date(e.year, 11, 1), date(e.year, 11, 30)
+    first, last = bounds(db, e)
     activities = db.scalars(select(Activity).where(Activity.user_id == user.id, Activity.date >= first,
         Activity.date <= min(last, local_today()), Activity.status.notin_(["deleted", "not_run", "admin_excluded"])).order_by(Activity.date, Activity.id)).all()
     db.query(ChallengeClaim).filter_by(user_id=user.id, edition_id=e.id).delete(synchronize_session="fetch")
@@ -127,17 +133,19 @@ def participant(db, user, claims=None, targets=None, ps=None, personal=False):
         p = by_period.get(target.period_id) if target else None
         status = "completed" if claim else "upcoming"
         if not claim and target:
-            start = p.starts_on if p else date(e.year, 11, 30)
+            start = p.starts_on if p else finale_date(e)
             end = p.ends_on if p else start
             status = "missed" if today > end else "open" if today >= start else "scheduled"
         cells.append({"km": km, "status": status, "period": p.number if p else None,
-                      "finale": km == e.finale_km, "completed_on": claim.date.isoformat() if claim else None})
+                      "finale": km == e.finale_km, "finale_date": finale_date(e).isoformat() if km == e.finale_km else None,
+                      "completed_on": claim.date.isoformat() if claim else None})
     result = {"id": user.id, "name": user.name or "Läufer/in", "total_score": sum(c.km for c in claims),
               "completed_count": len(claims), "slots": [km if km in by_km else None for km in range(1, 31)], "cells": cells}
     if personal:
         result["strava_connected"] = bool(user.refresh_token)
         result["last_synced_at"] = iso_utc(user.last_synced_at)
         result["sync_error"] = user.last_sync_error
+        result["sync_paused"] = os.getenv("STRAVA_SYNC_ENABLED", "1") != "1"
     return result
 
 def leaderboard(db):
@@ -162,8 +170,9 @@ def statistics(db):
     for c in db.scalars(select(ChallengeClaim).where(ChallengeClaim.edition_id == e.id)).all():
         totals[c.date] = totals.get(c.date, 0) + c.km
     cumulative, points = 0, []
-    for d in range(1, 31):
-        day = date(e.year, 11, d)
+    first, last = bounds(db, e)
+    for d in range((last - first).days + 1):
+        day = first + timedelta(days=d)
         cumulative += totals.get(day, 0)
         points.append({"date": day.isoformat(), "daily_km": totals.get(day, 0), "total_km": cumulative,
                        "future": day > local_today()})
@@ -208,7 +217,7 @@ def set_finale(db, km):
         return configuration(db, admin=True)
     if not 1 <= km <= 30:
         raise HTTPException(422, "Die Abschlussdistanz muss zwischen 1 und 30 km liegen.")
-    if local_today() >= date(e.year, 11, 30):
+    if local_today() >= finale_date(e):
         raise HTTPException(409, "Der Abschlusslauf hat bereits begonnen.")
     if any(km in p.draft_distances for p in periods(db, e)):
         raise HTTPException(409, "Diese Distanz ist bereits einer Auslosung zugeordnet.")
@@ -216,5 +225,25 @@ def set_finale(db, km):
     if db.query(ChallengeClaim).filter_by(target_id=t.id).first():
         raise HTTPException(409, "Der Abschlusslauf hat bereits Ergebnisse.")
     t.km, e.finale_km = km, km
+    db.commit()
+    return configuration(db, admin=True)
+
+
+def set_test_calendar(db, starts_on, period_days):
+    e = edition(db, lock=True)
+    if not e.is_test:
+        raise HTTPException(403, "Testzeiträume können nur in einer separaten Testumgebung geändert werden.")
+    ps = periods(db, e)
+    if any(p.published_at for p in ps):
+        raise HTTPException(409, "Den Testkalender vor der ersten Veröffentlichung festlegen. Veröffentlichte Zeiträume bleiben gesperrt.")
+    try:
+        spans, finale = calendar(starts_on, period_days, e.year)
+    except (ScheduleConfigurationError, OverflowError):
+        raise HTTPException(422, "Bitte vier Zeiträume mit je 1–31 Tagen innerhalb des Challenge-Jahres wählen.") from None
+    for p, (start, end) in zip(ps, spans):
+        p.starts_on, p.ends_on, p.draw_on = start, end, start - timedelta(days=1)
+    e.finale_on = finale
+    db.flush()
+    rebuild_all(db, e)
     db.commit()
     return configuration(db, admin=True)

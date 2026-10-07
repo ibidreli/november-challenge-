@@ -4,6 +4,8 @@ const config = {
   year: 2026,
   timezone: "Europe/Zurich",
   finale_km: 15,
+  test_mode: false,
+  starts_on: "2026-11-01",
   finale_date: "2026-11-30",
   server_date: "2026-11-04",
   periods: [
@@ -67,6 +69,7 @@ function participant(p, rank) {
             : "upcoming",
       period: draw.includes(i + 1) ? 1 : null,
       finale: i === 14,
+      finale_date: i === 14 ? config.finale_date : null,
       completed_on: p.done.includes(i + 1) ? "2026-11-03" : null,
     })),
     strava_connected: true,

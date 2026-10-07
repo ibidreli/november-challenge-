@@ -38,3 +38,11 @@ export function runDate(value) {
 export function pace(value) {
   return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}`;
 }
+
+export function challengeDate(value, long = false) {
+  return new Date(value + "T12:00:00Z").toLocaleDateString("de-CH", {
+    timeZone: "Europe/Zurich",
+    day: "numeric",
+    month: long ? "long" : "numeric",
+  });
+}

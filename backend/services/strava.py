@@ -3,7 +3,8 @@ import logging
 import os
 import threading
 from contextlib import contextmanager
-from datetime import datetime, date, time, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
+from urllib.parse import urlsplit
 import requests
 from sqlalchemy import select, text
 from database import SessionLocal, engine
@@ -11,6 +12,7 @@ from models.user import User
 from models.activity import Activity
 from services.challenge import edition, lock_user, rebuild_user
 from services.time import utcnow, ZURICH
+from services.schedule import bounds
 
 log = logging.getLogger(__name__)
 API = "https://www.strava.com/api/v3"
@@ -111,10 +113,10 @@ def upsert(db, user_id, data):
 
 def sync_user(db, user_id):
     e = edition(db)
-    year = e.year
+    first, last = bounds(db, e)
     db.commit()
-    after = int(datetime.combine(date(year, 11, 1), time(), ZURICH).timestamp()) - 1
-    before = int(datetime.combine(date(year, 12, 1), time(), ZURICH).timestamp())
+    after = int(datetime.combine(first, time(), ZURICH).timestamp()) - 1
+    before = int(datetime.combine(last + timedelta(days=1), time(), ZURICH).timestamp())
     fetched = []
     for page in range(1, 101):
         result = api_get(db, user_id, "/athlete/activities", {"after": after, "before": before, "per_page": 200, "page": page})
@@ -129,11 +131,13 @@ def sync_user(db, user_id):
         raise RuntimeError("Strava pagination limit exceeded; import was not committed")
     # Nothing has been written until the complete month has been fetched.
     e, user = lock_user(db, user_id)
+    if bounds(db, e) != (first, last):
+        raise RuntimeError("Challenge calendar changed during import; retry synchronization")
     seen = {str(int(a["id"])) for a in fetched}
     for data in fetched:
         upsert(db, user_id, data)
-    for old in db.scalars(select(Activity).where(Activity.user_id == user_id, Activity.date >= date(year, 11, 1),
-            Activity.date <= date(year, 11, 30), Activity.is_manual.is_(False), Activity.strava_id.is_not(None))).all():
+    for old in db.scalars(select(Activity).where(Activity.user_id == user_id, Activity.date >= first,
+            Activity.date <= last, Activity.is_manual.is_(False), Activity.strava_id.is_not(None))).all():
         if old.strava_id not in seen and old.status != "admin_excluded":
             old.status, old.effective_km = "deleted", 0
     db.flush()
@@ -143,6 +147,8 @@ def sync_user(db, user_id):
     db.commit()
 
 def sync_user_background(user_id):
+    if os.getenv("STRAVA_SYNC_ENABLED", "1") != "1":
+        return
     with sync_lock(user_id) as acquired:
         if not acquired:
             return
@@ -152,14 +158,26 @@ def sync_user_background(user_id):
             except Exception as exc:
                 db.rollback()
                 # Never log credential-bearing request/response bodies.
-                log.warning("Strava sync failed for user %s (%s)", user_id, type(exc).__name__)
+                if isinstance(exc, requests.HTTPError) and exc.response is not None:
+                    # Log only status and endpoint: query strings, bodies and headers can contain credentials.
+                    log.warning("Strava sync failed for user %s (HTTPError status=%s endpoint=%s)",
+                                user_id, exc.response.status_code, urlsplit(exc.response.url or "").path)
+                else:
+                    log.warning("Strava sync failed for user %s (%s)", user_id, type(exc).__name__)
                 user = db.get(User, user_id)
                 if user:
                     user.last_sync_attempt_at = utcnow()  # bounded retry frequency on failures
-                    user.last_sync_error = "Strava konnte nicht synchronisiert werden. Bitte später erneut versuchen."
+                    status = exc.response.status_code if isinstance(exc, requests.HTTPError) and exc.response is not None else None
+                    user.last_sync_error = {
+                        401: "Strava hat den Zugriff abgelehnt. Bitte Strava erneut verbinden.",
+                        403: "Strava erlaubt den Aktivitätszugriff nicht. Bitte erneut verbinden und die Lauf-Freigabe erlauben.",
+                        429: "Das Strava-Anfragelimit ist erreicht. Bitte später erneut synchronisieren.",
+                    }.get(status, "Strava konnte nicht synchronisiert werden. Bitte später erneut versuchen.")
                     db.commit()
 
 def sync_all_background(due_only=False):
+    if os.getenv("STRAVA_SYNC_ENABLED", "1") != "1":
+        return
     with SessionLocal() as db:
         query = select(User.id).where(User.refresh_token.is_not(None))
         if due_only:
@@ -169,6 +187,8 @@ def sync_all_background(due_only=False):
         sync_user_background(uid)
 
 def webhook_background(owner_id, activity_id, aspect):
+    if os.getenv("STRAVA_SYNC_ENABLED", "1") != "1":
+        return
     with SessionLocal() as db:
         uid = db.scalar(select(User.id).where(User.strava_id == owner_id))
     if not uid:

@@ -4,6 +4,8 @@ import ChallengeProgress from "./ChallengeProgress";
 import ChallengeStats from "./ChallengeStats";
 import Leaderboard from "./Leaderboard";
 import Groups from "./Groups";
+import TestNotice from "./TestNotice";
+import { challengeDate } from "../time";
 
 export default function Dashboard({ user, version, refresh, authLoading }) {
   const readTab = () => {
@@ -66,7 +68,9 @@ export default function Dashboard({ user, version, refresh, authLoading }) {
       <div className="page-heading">
         <div>
           <span className="eyebrow">
-            {data?.config.year || 2026} · 1.–30. November
+            {data
+              ? `${data.config.year} · ${challengeDate(data.config.starts_on || data.config.periods[0].starts_on)}–${challengeDate(data.config.finale_date)}`
+              : "November Challenge"}
           </span>
           <h1>November Challenge</h1>
         </div>
@@ -87,6 +91,7 @@ export default function Dashboard({ user, version, refresh, authLoading }) {
           ))}
         </nav>
       </div>
+      <TestNotice config={data?.config} />
       {error && (
         <div className="notice error" role="alert">
           {error}{" "}
@@ -174,15 +179,18 @@ export default function Dashboard({ user, version, refresh, authLoading }) {
                   ) : (
                     <>
                       <strong>
-                        {data.config.server_date < `${data.config.year}-11-01`
-                          ? "Am 1. November startet die Challenge."
+                        {data.config.server_date <
+                        (data.config.starts_on ||
+                          data.config.periods[0].starts_on)
+                          ? `Am ${challengeDate(data.config.starts_on || data.config.periods[0].starts_on, true)} startet die Challenge.`
                           : data.config.server_date === data.config.finale_date
                             ? `Heute: mindestens ${data.config.finale_km} km für den Abschlusslauf.`
-                            : "Hier siehst du deinen Fortschritt für den ganzen November."}
+                            : "Hier siehst du deinen Fortschritt für die ganze Challenge."}
                       </strong>
                       <span>
                         ★ {data.config.finale_km} km sind für den gemeinsamen
-                        Abschluss am 30.11. reserviert.
+                        Abschluss am {challengeDate(data.config.finale_date)}{" "}
+                        reserviert.
                       </span>
                     </>
                   )}
@@ -199,33 +207,41 @@ export default function Dashboard({ user, version, refresh, authLoading }) {
                   werden nicht in die nächste Woche übertragen.
                 </p>
                 <p>
-                  Am 30.11. zählt ein Lauf mit mindestens{" "}
-                  {data.config.finale_km} km automatisch für den Abschluss.
-                  Später hochgeladene Aktivitäten werden nach ihrem Lauftag in
-                  der Schweizer Zeitzone gewertet.
+                  Am {challengeDate(data.config.finale_date)} zählt ein Lauf mit
+                  mindestens {data.config.finale_km} km automatisch für den
+                  Abschluss. Später hochgeladene Aktivitäten werden nach ihrem
+                  Lauftag in der Schweizer Zeitzone gewertet.
                 </p>
               </details>
               <div className="sync-line">
                 <span className="muted">
-                  {user.last_synced_at
-                    ? `Letzte Synchronisation: ${new Date(user.last_synced_at).toLocaleString("de-CH", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Zurich" })}`
-                    : "Deine Strava-Läufe werden im Hintergrund geladen."}
+                  {user.sync_paused
+                    ? "Strava-Import ist pausiert."
+                    : user.last_synced_at
+                      ? `Letzte Synchronisation: ${new Date(user.last_synced_at).toLocaleString("de-CH", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Zurich" })}`
+                      : "Deine Strava-Läufe werden im Hintergrund geladen."}
                 </span>
                 <button
                   className="text-button"
-                  disabled={syncing}
+                  disabled={syncing || user.sync_paused}
                   onClick={sync}
                 >
                   {syncing ? "Wird gestartet …" : "Strava synchronisieren"}
                 </button>
               </div>
-              {!user.strava_connected && (
+              {user.sync_paused && (
+                <p className="notice">
+                  Die Strava-Synchronisierung ist auf dieser Seite vorübergehend
+                  pausiert.
+                </p>
+              )}
+              {!user.strava_connected && !user.sync_paused && (
                 <p className="notice">
                   Die Strava-Verbindung muss erneuert werden.{" "}
                   <a href={loginUrl()}>Strava erneut verbinden</a>.
                 </p>
               )}
-              {user.sync_error && (
+              {user.sync_error && !user.sync_paused && (
                 <p className="notice" role="status">
                   {user.sync_error}
                 </p>
@@ -235,7 +251,11 @@ export default function Dashboard({ user, version, refresh, authLoading }) {
           {!user && !authLoading && (
             <section className="intro">
               <div>
-                <span className="eyebrow">30 Distanzen. Dein November.</span>
+                <span className="eyebrow">
+                  {data.config.test_mode
+                    ? "30 Distanzen. Dein Testlauf."
+                    : "30 Distanzen. Dein November."}
+                </span>
                 <h2>Ein Monat, viele gemeinsame Schritte.</h2>
                 <p>
                   Jede Woche werden neue Distanzen ausgelost. Du entscheidest,
@@ -254,7 +274,10 @@ export default function Dashboard({ user, version, refresh, authLoading }) {
                 </li>
                 <li>
                   <b>Gemeinsam abschliessen</b>
-                  <span>Am 30.11. mit {data.config.finale_km} km</span>
+                  <span>
+                    Am {challengeDate(data.config.finale_date)} mit{" "}
+                    {data.config.finale_km} km
+                  </span>
                 </li>
               </ol>
             </section>

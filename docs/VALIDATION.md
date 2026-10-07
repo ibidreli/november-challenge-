@@ -1,5 +1,19 @@
 # Lokale Prüfung am 7. Oktober 2026
 
+## Ergänzung: Oktober-Probelauf
+
+- **37 Backend-/API-Tests mit PostgreSQL 17:** erfolgreich, einschliesslich Oktober-Importgrenzen in Schweizer Zeit, längstem Tageslauf, verkürzten Testperioden, Wochenwechseln, automatischem Finale und unveränderter November-Wertung.
+- **8 Browserabläufe:** erfolgreich, zusätzlich Oktober-Admin mit konfigurierbarem Kalender, Sperre nach Veröffentlichung, persönlichem Fortschritt, Oktober-Diagramm und Handy-/Desktop-Darstellung.
+- **Test-Dockerfile mit Oberfläche und API auf einem Host:** gebaut und mit PostgreSQL auf `PORT=10000` gestartet. `/`, `/admin`, Logo-/CSS-/JS-Assets und `/healthz` liefern HTTP 200. Ein 35-km-Testlauf wird als 29 km im Diagramm gewertet; Kalender und Ergebnis bleiben nach Containerwechsel erhalten.
+- **Getrennte Datenbanken:** Start im Testmodus gegen eine bestehende produktive Edition wird abgelehnt; umgekehrt ebenso. Migration von einer bereits vorhandenen Wochen-Edition erhält Jahr, Finale und Ergebnisse.
+- **Pause für die bestehende Strava-App:** Hintergrundimport, manuelle Synchronisation und Webhook-Worker sind bei `STRAVA_SYNC_ENABLED=0` pausiert. Der Container liefert bei manueller Synchronisation HTTP 409.
+- **Fehlerdiagnose:** HTTP-Status und Endpunkt werden protokolliert; Query-Strings, Tokens und Antwortkörper werden nicht geloggt. Fehlgeschlagene Importe erhalten bestehende Punkte.
+- **Build und Sichtprüfung:** Produktionsbuild erfolgreich; Oktober-Screenshots auf Handy und Desktop geprüft. Keine horizontale Überbreite in den getesteten Ansichten. `.env` und E2E-Testserver fehlen im Test-Image.
+
+Render-/DNS-Einrichtung und echte Strava-Autorisierung stehen noch aus; Anleitung mit bestehender App: [OCTOBER_TEST.md](../OCTOBER_TEST.md). Die folgenden Punkte dokumentieren die vorherige Prüfung der November-Implementierung.
+
+## Vorherige Prüfung
+
 - **28 Backend-/API-Tests mit PostgreSQL 17:** erfolgreich, inklusive paralleler Wertungsberechnung und acht gleichzeitiger identischer Gruppen-Teilnahmen ohne Duplikat.
 - **SQLite:** dieselbe Suite erfolgreich; der eine PostgreSQL-spezifische Sperrtest wird übersprungen.
 - **7 Playwright-Browserabläufe:** erfolgreich auf Desktop (1440 px) und emuliertem Handy (390 px), inklusive Anmeldung, persönlicher Feldchen, aufklappbarer Rangliste, Gruppenformular mit interaktiver Leaflet-Karte und Gast-Teilnahme. Schweizer Uhrzeiten werden unabhängig von der Browser-Zeitzone geprüft.
