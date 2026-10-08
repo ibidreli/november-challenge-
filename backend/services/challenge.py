@@ -3,7 +3,8 @@ import os
 from datetime import timedelta
 from decimal import Decimal
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.orm import load_only
 from models.user import User
 from models.activity import Activity
 from models.challenge import ChallengeEdition, ChallengePeriod, DistanceTarget, ChallengeClaim
@@ -45,12 +46,13 @@ def periods(db, e):
 def configuration(db, admin=False):
     e = edition(db)
     today = local_today()
-    first, last = bounds(db, e)
+    ps = periods(db, e)
+    first, last = min(p.starts_on for p in ps), finale_date(e)
     result = {"year": e.year, "month": e.month, "timezone": e.timezone, "finale_km": e.finale_km,
               "test_mode": e.month == 10, "starts_on": first.isoformat(),
               "finale_date": last.isoformat(), "server_date": today.isoformat(),
               "server_now": iso_utc(utcnow()), "periods": []}
-    for p in periods(db, e):
+    for p in ps:
         item = {"number": p.number, "starts_on": p.starts_on.isoformat(), "ends_on": p.ends_on.isoformat(),
                 "draw_on": p.draw_on.isoformat(), "capacity": p.capacity,
                 "published": bool(p.published_at), "current": p.starts_on <= today <= p.ends_on,
@@ -114,8 +116,8 @@ def rebuild_all(db, e):
     for uid in db.scalars(select(User.id).order_by(User.id)).all():
         rebuild_user(db, uid, e)
 
-def participant(db, user, claims=None, targets=None, ps=None, personal=False):
-    e = edition(db)
+def participant(db, user, claims=None, targets=None, ps=None, personal=False, e=None):
+    e = e or edition(db)
     claims = claims if claims is not None else db.scalars(select(ChallengeClaim).where(
         ChallengeClaim.edition_id == e.id, ChallengeClaim.user_id == user.id)).all()
     targets = targets if targets is not None else db.scalars(select(DistanceTarget).where(DistanceTarget.edition_id == e.id)).all()
@@ -151,7 +153,9 @@ def leaderboard(db):
     groups = {}
     for c in db.scalars(select(ChallengeClaim).where(ChallengeClaim.edition_id == e.id)).all():
         groups.setdefault(c.user_id, []).append(c)
-    users = [participant(db, u, groups.get(u.id, []), targets, ps) for u in db.scalars(select(User)).all()]
+    # Reuse the loaded edition for every runner: five queries regardless of user count.
+    users = [participant(db, u, groups.get(u.id, []), targets, ps, e=e)
+             for u in db.scalars(select(User).options(load_only(User.id, User.name))).all()]
     users.sort(key=lambda u: (-u["total_score"], u["name"].casefold(), u["id"]))
     previous, rank = None, 0
     for i, u in enumerate(users, 1):
@@ -162,17 +166,17 @@ def leaderboard(db):
 
 def statistics(db):
     e = edition(db)
-    totals = {}
-    for c in db.scalars(select(ChallengeClaim).where(ChallengeClaim.edition_id == e.id)).all():
-        totals[c.date] = totals.get(c.date, 0) + c.km
+    totals = dict(db.execute(select(ChallengeClaim.date, func.sum(ChallengeClaim.km))
+        .where(ChallengeClaim.edition_id == e.id).group_by(ChallengeClaim.date)).all())
     cumulative, points = 0, []
     first, last = bounds(db, e)
+    today = local_today()
     for d in range((last - first).days + 1):
         day = first + timedelta(days=d)
         cumulative += totals.get(day, 0)
         points.append({"date": day.isoformat(), "daily_km": totals.get(day, 0), "total_km": cumulative,
-                       "future": day > local_today()})
-    return {"total_km": cumulative, "participants": db.query(User).count(), "points": points}
+                       "future": day > today})
+    return {"total_km": cumulative, "participants": db.scalar(select(func.count(User.id))), "points": points}
 
 def save_draw(db, number, distances, publish=False):
     e = edition(db, lock=True)

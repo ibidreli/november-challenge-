@@ -3,8 +3,10 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from urllib.parse import urlsplit
+from time import perf_counter
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 
 if os.getenv("LOAD_ENV_FILE", "0") == "1":
@@ -52,6 +54,7 @@ async def lifespan(app):
                 pass
 
 app = FastAPI(title="November Challenge API", version="2026.1", lifespan=lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
 origins = {"http://localhost:5173", "http://127.0.0.1:5173"} if not os.getenv("RENDER") else set()
 for env in ("FRONTEND_URL", "CUSTOM_DOMAIN", "ALLOWED_ORIGINS"):
     origins.update(value.strip().rstrip("/") for value in os.getenv(env, "").split(",") if value.strip())
@@ -61,6 +64,7 @@ app.add_middleware(CORSMiddleware, allow_origins=sorted(origins), allow_credenti
 
 @app.middleware("http")
 async def guard(request: Request, call_next):
+    started = perf_counter()
     if not DB_AVAILABLE and request.url.path not in {"/", "/healthz"}:
         return JSONResponse({"detail": "Backend derzeit nicht verfügbar. Bitte später erneut versuchen."}, 503)
     if request.method in {"POST", "PUT", "DELETE", "PATCH"} and request.url.path != "/auth/webhook":
@@ -69,6 +73,7 @@ async def guard(request: Request, call_next):
         if origin and origin not in origins and origin != own:
             return JSONResponse({"detail": "Diese Herkunft ist nicht zugelassen."}, 403)
     response = await call_next(request)
+    response.headers["Server-Timing"] = f"app;dur={(perf_counter() - started) * 1000:.1f}"
     if request.url.path.startswith(("/auth", "/users/me", "/admin", "/community")):
         response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"

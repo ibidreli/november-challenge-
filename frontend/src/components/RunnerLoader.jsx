@@ -1,47 +1,114 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
+
+const duration = "0.85s";
+const ankles = [
+  [101, 100],
+  [88, 101],
+  [75, 100],
+  [63, 95],
+  [64, 79],
+  [78, 70],
+  [98, 78],
+  [107, 90],
+];
+const bounce = [0, -1, -2, -1, 0, -1, -2, -1];
+const point = (x, y) => `${x.toFixed(2)} ${y.toFixed(2)}`;
+
+function leg(frame, offset = 0) {
+  const [x, y] = ankles[(frame + offset) % 8];
+  const hip = [82, 62 + bounce[frame]];
+  const dx = x - hip[0],
+    dy = y - hip[1];
+  const distance = Math.hypot(dx, dy);
+  // Two equal bones, with the knee always bending forwards. The planted foot
+  // stays on the ground while the hip rises, rather than rotating independently.
+  const bend = Math.sqrt(24 ** 2 - (distance / 2) ** 2);
+  const knee = [
+    hip[0] + dx / 2 + (dy / distance) * bend,
+    hip[1] + dy / 2 - (dx / distance) * bend,
+  ];
+  return `M${point(...hip)} L${point(...knee)} L${point(x, y)} l8 0`;
+}
+
+function arm(frame, offset = 0) {
+  const angle =
+    (-35 * Math.cos(((frame + offset) * Math.PI) / 4) * Math.PI) / 180;
+  const shoulder = [92, 40 + bounce[frame]];
+  const elbow = [
+    shoulder[0] + Math.sin(angle) * 14,
+    shoulder[1] + Math.cos(angle) * 14,
+  ];
+  const forearm = angle + (110 * Math.PI) / 180;
+  const hand = [
+    elbow[0] + Math.sin(forearm) * 14,
+    elbow[1] + Math.cos(forearm) * 14,
+  ];
+  return `M${point(...shoulder)} L${point(...elbow)} L${point(...hand)}`;
+}
+
+const cycle = (make) => Array.from({ length: 9 }, (_, i) => make(i % 8));
+const paths = [
+  { name: "back-arm", far: true, poses: cycle((i) => arm(i, 4)) },
+  { name: "back-leg", far: true, poses: cycle((i) => leg(i, 4)) },
+  {
+    name: "torso",
+    poses: cycle((i) => `M92 ${39 + bounce[i]} L82 ${62 + bounce[i]}`),
+  },
+  { name: "front-leg", poses: cycle((i) => leg(i)) },
+  { name: "front-arm", poses: cycle((i) => arm(i)) },
+];
 
 export default function RunnerLoader() {
+  const svg = useRef(null);
+  useEffect(() => {
+    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => {
+      if (preference.matches) {
+        svg.current.pauseAnimations();
+        svg.current.setCurrentTime(0);
+      } else svg.current.unpauseAnimations();
+    };
+    update();
+    preference.addEventListener("change", update);
+    return () => preference.removeEventListener("change", update);
+  }, []);
   return (
     <div
       className="runner-loader"
       role="status"
       aria-label="Challenge wird geladen"
     >
-      <svg viewBox="0 0 180 120" fill="none" aria-hidden="true">
-        <path className="runner-track" d="M40 107h100" />
-        <ellipse className="runner-shadow" cx="89" cy="105" rx="19" ry="2" />
+      <svg ref={svg} viewBox="0 0 180 120" fill="none" aria-hidden="true">
+        <path className="runner-track" d="M40 104h100" />
+        <ellipse className="runner-shadow" cx="89" cy="103" rx="19" ry="2" />
         <g
           className="runner-stride"
           stroke="currentColor"
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <g transform="translate(91 40)" className="runner-far">
-            <g className="runner-arm runner-arm-back">
-              <path d="M0 0v14l14-6" />
-            </g>
-          </g>
-          <g transform="translate(82 62)" className="runner-far">
-            <g className="runner-leg runner-leg-back">
-              <path d="M0 0v20" />
-              <g transform="translate(0 20)">
-                <path className="runner-knee runner-knee-back" d="M0 0v19h9" />
-              </g>
-            </g>
-          </g>
-          <path className="runner-torso" d="m92 39-10 23" />
-          <circle className="runner-head" cx="98" cy="24" r="7" stroke="none" />
-          <g transform="translate(82 62)">
-            <g className="runner-leg">
-              <path d="M0 0v20" />
-              <g transform="translate(0 20)">
-                <path className="runner-knee" d="M0 0v19h9" />
-              </g>
-            </g>
-          </g>
-          <g transform="translate(91 40)">
-            <path className="runner-arm" d="M0 0v14l14-6" />
-          </g>
+          {paths.map(({ name, far, poses }) => (
+            <path
+              key={name}
+              className={`runner-${name}${far ? " runner-far" : ""}`}
+              d={poses[0]}
+            >
+              <animate
+                attributeName="d"
+                values={poses.join(";")}
+                dur={duration}
+                repeatCount="indefinite"
+              />
+            </path>
+          ))}
+          <circle className="runner-head" cx="98" cy="24" r="7" stroke="none">
+            <animate
+              attributeName="cy"
+              values={cycle((i) => 24 + bounce[i]).join(";")}
+              dur={duration}
+              repeatCount="indefinite"
+            />
+          </circle>
         </g>
       </svg>
     </div>

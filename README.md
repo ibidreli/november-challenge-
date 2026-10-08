@@ -53,5 +53,6 @@ npm run dev
 - [API-Verzeichnis](docs/API.md)
 - [Projektstruktur](PROJECT_OVERVIEW.md) und [Bereinigung](docs/CLEANUP.md)
 - [Durchgeführte Prüfungen](docs/VALIDATION.md)
+- [Ladezeit prüfen und Render optimieren](docs/PERFORMANCE.md)
 
 Der Code ist lokal implementiert. Eine Veröffentlichung, DNS-Änderung oder Änderung der produktiven Render-Datenbank erfolgt nicht durch das lokale Testen.

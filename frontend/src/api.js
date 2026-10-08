@@ -11,13 +11,27 @@ const client = axios.create({
   withCredentials: true,
   timeout: 30000,
 });
-export async function api(path, { method = "GET", body, admin = false } = {}) {
-  if (isPreview) return previewRequest(path, method, body);
+const pendingPublicReads = new Map();
+export function api(path, { method = "GET", body, admin = false } = {}) {
   const headers = admin
     ? { "X-Admin-Token": localStorage.getItem("nc_admin") || "" }
     : {};
-  return (await client.request({ url: path, method, data: body, headers }))
-    .data;
+  const publicRead =
+    method === "GET" &&
+    !admin &&
+    ["/challenge", "/challenge/statistics", "/users/"].includes(path);
+  if (publicRead && pendingPublicReads.has(path))
+    return pendingPublicReads.get(path);
+  const request = isPreview
+    ? previewRequest(path, method, body)
+    : client
+        .request({ url: path, method, data: body, headers })
+        .then((r) => r.data);
+  if (!publicRead) return request;
+  // Share only concurrent reads (including StrictMode mounts), never cache results.
+  const pending = request.finally(() => pendingPublicReads.delete(path));
+  pendingPublicReads.set(path, pending);
+  return pending;
 }
 export function errorText(error) {
   if (error.isAxiosError && !error.response)

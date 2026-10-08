@@ -98,6 +98,37 @@ class ApiTests(unittest.TestCase):
         return {"name": "Elias", "distance_km": 9, "pace_seconds": 360, "starts_at": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
                 "latitude": 47.37, "longitude": 8.54, "meeting_point": "Beim Bahnhof"}
 
+    def test_leaderboard_query_count_stays_constant_and_responses_are_compressed(self):
+        from sqlalchemy import event
+        self.add_user("First runner")
+
+        def measured():
+            queries = []
+            def record(conn, cursor, statement, parameters, context, executemany):
+                queries.append(statement)
+            event.listen(engine, "before_cursor_execute", record)
+            try:
+                with SessionLocal() as db:
+                    result = challenge.leaderboard(db)
+            finally:
+                event.remove(engine, "before_cursor_execute", record)
+            return result, len(queries)
+
+        single, single_queries = measured()
+        with SessionLocal() as db:
+            db.add_all(User(name=f"Runner {i}") for i in range(49))
+            db.commit()
+        many, many_queries = measured()
+        self.assertEqual(len(single), 1)
+        self.assertEqual(len(many), 50)
+        self.assertEqual(single_queries, 5)
+        self.assertEqual(many_queries, single_queries)
+        response = self.client.get("/users/", headers={"Accept-Encoding": "gzip"})
+        self.assertEqual(response.json(), many)
+        self.assertEqual(response.headers["content-encoding"], "gzip")
+        self.assertLess(int(response.headers["content-length"]), len(response.content) // 4)
+        self.assertTrue(response.headers["server-timing"].startswith("app;dur="))
+
     def october(self):
         self.enterContext(patch.dict(os.environ, CHALLENGE_MONTH="10"))
         with SessionLocal() as db:

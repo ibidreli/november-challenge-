@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { lazy, Suspense, useEffect, useState } from "react";
 import { api, errorText, loginUrl } from "../api";
 import ChallengeProgress from "./ChallengeProgress";
 import ChallengeStats from "./ChallengeStats";
 import Leaderboard from "./Leaderboard";
-import Groups from "./Groups";
+import usePublicResource from "../usePublicResource";
 import TestNotice from "./TestNotice";
 import RunnerLoader from "./RunnerLoader";
 import { challengeDate } from "../time";
+const Groups = lazy(() => import("./Groups"));
 
 export default function Dashboard({ user, version, refresh, authLoading }) {
   const readTab = () => {
@@ -14,34 +15,30 @@ export default function Dashboard({ user, version, refresh, authLoading }) {
     return ["ranking", "groups"].includes(value) ? value : "overview";
   };
   const [tab, setTab] = useState(readTab),
-    [data, setData] = useState(null),
     [error, setError] = useState(""),
+    [retry, setRetry] = useState(0),
     [syncing, setSyncing] = useState(false);
+  const publicVersion = `${version}:${retry}`;
+  const config = usePublicResource("/challenge", publicVersion);
+  const stats = usePublicResource(
+    "/challenge/statistics",
+    publicVersion,
+    tab === "overview",
+  );
+  const people = usePublicResource("/users/", publicVersion, tab === "ranking");
+  const data = config.data ? { config: config.data, stats: stats.data } : null;
+  const loadError =
+    error ||
+    (tab === "ranking"
+      ? people.error
+      : tab === "overview"
+        ? config.error || stats.error
+        : "");
   useEffect(() => {
     const handler = () => setTab(readTab());
     window.addEventListener("popstate", handler);
     return () => window.removeEventListener("popstate", handler);
   }, []);
-  useEffect(() => {
-    let alive = true;
-    Promise.all([
-      api("/challenge"),
-      api("/challenge/statistics"),
-      api("/users/"),
-    ])
-      .then(([config, stats, people]) => {
-        if (alive) {
-          setData({ config, stats, people });
-          setError("");
-        }
-      })
-      .catch((e) => {
-        if (alive) setError(errorText(e));
-      });
-    return () => {
-      alive = false;
-    };
-  }, [version]);
   function changeTab(value) {
     setTab(value);
     const url = new URL(location);
@@ -93,20 +90,38 @@ export default function Dashboard({ user, version, refresh, authLoading }) {
         </nav>
       </div>
       <TestNotice config={data?.config} />
-      {error && (
+      {loadError && (
         <div className="notice error" role="alert">
-          {error}{" "}
-          <button className="text-button" onClick={refresh}>
+          {loadError}{" "}
+          <button
+            className="text-button"
+            onClick={() => {
+              setError("");
+              setRetry((value) => value + 1);
+            }}
+          >
             Erneut laden
           </button>
         </div>
       )}
       {tab === "groups" ? (
-        <Groups user={user} />
-      ) : !data ? (
-        !error && <RunnerLoader />
+        <Suspense fallback={<RunnerLoader />}>
+          <Groups user={user} />
+        </Suspense>
       ) : tab === "ranking" ? (
-        <Leaderboard people={data.people} total={data.stats.total_km} />
+        people.data ? (
+          <Leaderboard
+            people={people.data}
+            total={people.data.reduce(
+              (sum, person) => sum + person.total_score,
+              0,
+            )}
+          />
+        ) : (
+          !people.error && <RunnerLoader />
+        )
+      ) : !data ? (
+        !config.error && <RunnerLoader />
       ) : (
         <>
           {user && (
@@ -279,7 +294,11 @@ export default function Dashboard({ user, version, refresh, authLoading }) {
               </ol>
             </section>
           )}
-          <ChallengeStats stats={data.stats} config={data.config} />
+          {data.stats ? (
+            <ChallengeStats stats={data.stats} config={data.config} />
+          ) : (
+            !stats.error && <RunnerLoader />
+          )}
           <details className="rules schedule">
             <summary>Auslosungen und Zeiträume</summary>
             <div className="period-list">

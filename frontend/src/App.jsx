@@ -1,9 +1,17 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import Dashboard from "./components/Dashboard";
-import AdminPanel from "./components/AdminPanel";
+import RunnerLoader from "./components/RunnerLoader";
 import { api, isPreview, loginUrl, errorText } from "./api";
 import { previewLogin } from "./previewData";
 import logo from "../logo/Logo.png";
+const AdminPanel = lazy(() => import("./components/AdminPanel"));
 
 export default function App() {
   const [user, setUser] = useState(null),
@@ -11,19 +19,27 @@ export default function App() {
   const [error, setError] = useState(""),
     [version, setVersion] = useState(0);
   const admin = window.location.pathname.replace(/\/$/, "") === "/admin";
-  const refresh = useCallback(async () => {
-    try {
-      setUser(await api("/users/me"));
-      setError("");
-    } catch (e) {
-      if (e.response?.status === 401) {
-        setUser(null);
+  const pendingRefresh = useRef(null),
+    didRefresh = useRef(false);
+  const refresh = useCallback(() => {
+    if (pendingRefresh.current) return pendingRefresh.current;
+    pendingRefresh.current = (async () => {
+      try {
+        setUser(await api("/users/me"));
         setError("");
-      } else setError(errorText(e));
-    } finally {
-      setAuthLoading(false);
-      setVersion((v) => v + 1);
-    }
+      } catch (e) {
+        if (e.response?.status === 401) {
+          setUser(null);
+          setError("");
+        } else setError(errorText(e));
+      } finally {
+        setAuthLoading(false);
+        if (didRefresh.current) setVersion((v) => v + 1);
+        didRefresh.current = true;
+        pendingRefresh.current = null;
+      }
+    })();
+    return pendingRefresh.current;
   }, []);
   useEffect(() => {
     refresh();
@@ -107,7 +123,9 @@ export default function App() {
           </div>
         )}
         {admin ? (
-          <AdminPanel />
+          <Suspense fallback={<RunnerLoader />}>
+            <AdminPanel />
+          </Suspense>
         ) : (
           <Dashboard
             user={user}
