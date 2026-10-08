@@ -10,8 +10,7 @@ export default function TestNotice({ config }) {
         {challengeDate(config.finale_date)}
       </strong>
       <span>
-        Hier zählen aktuell deine Oktober-Läufe. Die November-Auslosungen und
-        Ergebnisse werden separat gespeichert.
+        Hier zählen aktuell deine Oktober-Läufe.
       </span>
     </div>
   );
