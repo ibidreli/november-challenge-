@@ -67,4 +67,10 @@ npm run build:ui
 
 Mit `dev:ui` entwickeln: Vite aktualisiert die Ansicht automatisch. Bei einer Wertungsänderung die API-Tests ausführen; bei Formularen oder Login zusätzlich `npm test`. Für Auslosungen mit echten lokalen Daten: `/admin` → Challenge → Entwurf speichern → öffentliche Übersicht prüfen → Veröffentlichen. Auslosungen vor dem 1.11. können vorbereitet werden; gewertet wird erst ab dem tatsächlichen Lauftag.
 
-Die Karte verwendet Leaflet und OpenStreetMap mit sichtbarer Quellenangabe. Ein anderer Kachelanbieter lässt sich mit `VITE_MAP_TILE_URL` und `VITE_MAP_ATTRIBUTION` vor dem Frontend-Build konfigurieren. Für umfangreichere Nutzung die [OSM-Nutzungsbedingungen](https://operations.osmfoundation.org/policies/tiles/) beachten.
+## Laufgruppen teilen
+
+Jede Gruppe hat einen kleinen Teilen-Button. Der Dialog zeigt ein schlichtes PNG mit Logo, Distanz, Pace, Datum, Uhrzeit, Ersteller und Treffpunkt-Karte. **Bild teilen** öffnet auf unterstützten Geräten den Teilen-Dialog des Betriebssystems. Andernfalls lädt derselbe Button das Bild herunter.
+
+Das Bild enthält die Adresse `/?tab=groups`; beim nativen Teilen wird dieser Link mitgegeben. Bilder entstehen nur beim Öffnen des Dialogs im Browser. Es gibt keine zusätzliche Backend-Schnittstelle oder Render-Einstellung. Zum Anpassen: `frontend/src/components/ShareRun.jsx`, `frontend/src/shareCard.js` und `frontend/src/runSharing.js`.
+
+Die Karte verwendet Leaflet und OpenStreetMap mit sichtbarer Quellenangabe. Ein anderer Kachelanbieter lässt sich mit `VITE_MAP_TILE_URL` und `VITE_MAP_ATTRIBUTION` vor dem Frontend-Build konfigurieren. Für den Bildexport muss der Anbieter CORS für Kartenkacheln erlauben; andernfalls wird ein Hinweis mit Startkoordinaten exportiert und der Gruppenlink bleibt verfügbar. Für umfangreichere Nutzung die [OSM-Nutzungsbedingungen](https://operations.osmfoundation.org/policies/tiles/) beachten.

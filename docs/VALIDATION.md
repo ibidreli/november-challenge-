@@ -1,5 +1,11 @@
 # Lokale Prüfung am 8. Oktober 2026
 
+## Laufgruppen teilen
+
+- **Browser:** alle 13 Browserabläufe erfolgreich, darunter sechs Teilen-Prüfungen auf Desktop und Handy: genau eine Bild-Aktion, PNG-Download, nativer Bildversand mit Benutzeraktivierung und Link zu `?tab=groups`, Abbruch sowie Download bei fehlender Unterstützung oder Kartenfehlern. Der native Teilen-Dialog wird im Test simuliert; es wird keine Nachricht versendet.
+- **Integration:** die bisherigen sechs UI-Prüfungen und der Ablauf gegen die echte lokale API bleiben Bestandteil der Suite. Die zuvor ergänzten Gruppen-Direktlinks, die dafür vorgesehene Backend-Schnittstelle und die QR-Code-Abhängigkeit sind entfernt.
+- **Build und Sichtprüfung:** Produktionsbuild erfolgreich. Export mit echten OpenStreetMap-Kacheln und sichtbarer Quellenangabe geprüft; PNG und Handy-Dialog unter `output/verification/run-share-real-map.png` und `output/verification/share-mobile-viewport.png`. Keine zusätzliche Render-Konfiguration erforderlich. Tatsächliches Versenden über WhatsApp auf einem echten Handy bleibt als Geräteprüfung offen.
+
 ## Oktober direkt auf der bestehenden Website
 
 - **36 Backend-/API-Tests mit PostgreSQL 17:** erfolgreich, einschliesslich Oktober-Importgrenzen in Schweizer Zeit, längstem Tageslauf, automatischem Finale und Rückwechsel zur unveränderten November-Wertung.

@@ -3,6 +3,7 @@ import { api, errorText } from "../api";
 import { localInput, zurichToISO, runDate, pace } from "../time";
 import StartMap from "./StartMap";
 import Modal from "./Modal";
+import ShareRun from "./ShareRun";
 
 function RunForm({ user, run, onSaved, onClose }) {
   const [name, setName] = useState(run?.creator_name || user?.name || ""),
@@ -154,6 +155,7 @@ export default function Groups({ user }) {
     [loading, setLoading] = useState(true),
     [error, setError] = useState("");
   const [form, setForm] = useState(null),
+    [sharing, setSharing] = useState(null),
     [joining, setJoining] = useState(null),
     [name, setName] = useState(user?.name || ""),
     [busy, setBusy] = useState(false),
@@ -187,7 +189,8 @@ export default function Groups({ user }) {
     if (user?.name) setName(user.name);
   }, [user?.name]);
   const closeForm = useCallback(() => setForm(null), []),
-    closeJoin = useCallback(() => setJoining(null), []);
+    closeJoin = useCallback(() => setJoining(null), []),
+    closeShare = useCallback(() => setSharing(null), []);
   const expired = runs
     .filter((r) => new Date(r.expires_at).getTime() <= tick + clockOffset)
     .map((r) => r.id)
@@ -256,7 +259,30 @@ export default function Groups({ user }) {
               key={r.id}
               className={`group-card${focusId === r.id ? " selected" : ""}`}
             >
-              <div className="group-date">{runDate(r.starts_at)}</div>
+              <div className="group-card-top">
+                <div className="group-date">{runDate(r.starts_at)}</div>
+                <button
+                  type="button"
+                  className="share-button"
+                  onClick={() => setSharing(r)}
+                  aria-label={`Lauf teilen: ${r.distance_km} km, ${r.meeting_point}`}
+                >
+                  <svg
+                    width="17"
+                    height="17"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 16V3m-4 4 4-4 4 4M6 12H4v9h16v-9h-2" />
+                  </svg>
+                  <span>Teilen</span>
+                </button>
+              </div>
               <div className="section-heading">
                 <h3>{r.distance_km} km gemeinsam laufen</h3>
                 {r.joined && <span className="badge">Du bist dabei</span>}
@@ -361,6 +387,7 @@ export default function Groups({ user }) {
           }}
         />
       )}
+      {sharing && <ShareRun run={sharing} onClose={closeShare} />}
       {joining && (
         <Modal title="Ich bin dabei" onClose={closeJoin}>
           <p>

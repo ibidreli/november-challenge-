@@ -5,6 +5,7 @@ import ChallengeStats from "./ChallengeStats";
 import Leaderboard from "./Leaderboard";
 import Groups from "./Groups";
 import TestNotice from "./TestNotice";
+import RunnerLoader from "./RunnerLoader";
 import { challengeDate } from "../time";
 
 export default function Dashboard({ user, version, refresh, authLoading }) {
@@ -103,9 +104,7 @@ export default function Dashboard({ user, version, refresh, authLoading }) {
       {tab === "groups" ? (
         <Groups user={user} />
       ) : !data ? (
-        <p className="empty-state" aria-live="polite">
-          Challenge wird geladen …
-        </p>
+        !error && <RunnerLoader />
       ) : tab === "ranking" ? (
         <Leaderboard people={data.people} total={data.stats.total_km} />
       ) : (

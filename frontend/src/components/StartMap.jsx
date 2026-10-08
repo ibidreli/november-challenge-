@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
+import { mapTiles, mapAttribution } from "../mapConfig";
 
 export default function StartMap({
   runs = [],
@@ -32,16 +33,10 @@ export default function StartMap({
           point ? 14 : 8,
         );
         instance.current = map;
-        L.tileLayer(
-          import.meta.env.VITE_MAP_TILE_URL ||
-            "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-          {
-            maxZoom: 19,
-            attribution:
-              import.meta.env.VITE_MAP_ATTRIBUTION ||
-              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-          },
-        )
+        L.tileLayer(mapTiles, {
+          maxZoom: 19,
+          attribution: mapAttribution,
+        })
           .addTo(map)
           .on("tileerror", () => {
             if (!cancelled)
