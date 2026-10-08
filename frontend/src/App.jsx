@@ -118,7 +118,7 @@ export default function App() {
         )}
       </main>
       <footer>
-        November Challenge · Gemeinsam zählt jeder Lauf.{" "}
+        November Challenge · Made by Elias Pulver.{" "}
         <a href={admin ? "/" : "/admin"}>{admin ? "Zur Challenge" : "Admin"}</a>
       </footer>
     </div>

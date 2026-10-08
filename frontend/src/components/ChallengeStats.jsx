@@ -58,7 +58,7 @@ export default function ChallengeStats({ stats, config }) {
       </div>
       <p className="muted">
         {stats.participants} Teilnehmer/innen · Gezählt werden die abgehakten
-        Distanzen. Ein 35-km-Lauf für ein 29-km-Feld trägt 29 km bei.
+        Distanzen.
       </p>
       {!points.length && (
         <p className="notice">

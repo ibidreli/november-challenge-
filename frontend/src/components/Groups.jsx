@@ -348,9 +348,7 @@ export default function Groups({ user }) {
         </div>
       )}
       <p className="muted groups-note">
-        Läufe verschwinden automatisch 3 Stunden nach dem Start. Als Gast kannst
-        du deine Teilnahme auf diesem Browser verwalten, solange dessen Cookies
-        erhalten bleiben.
+        Läufe verschwinden automatisch 3 Stunden nach dem Start.
       </p>
       {form && (
         <RunForm

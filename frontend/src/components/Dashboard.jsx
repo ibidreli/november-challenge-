@@ -200,17 +200,16 @@ export default function Dashboard({ user, version, refresh, authLoading }) {
               <details className="rules">
                 <summary>So zählt dein Lauf</summary>
                 <p>
-                  Pro Tag zählt dein längster einzelner Lauf. Er erledigt die
-                  grösste noch offene Distanz deiner aktuellen Woche, die du
-                  erreicht hast. 35 km können also das 29-km-Feld erledigen.
-                  Kürzere Läufe werden nicht zusammengerechnet, offene Felder
-                  werden nicht in die nächste Woche übertragen.
+                  Pro Tag zählt dein längster einzelner Lauf. 
+                  Dabei wird die grösste noch offene Distanz der aktuellen Woche abgehakt, die du mit diesem Lauf erreicht oder übertroffen hast. 
+                  Du entscheidest selbst, in welcher Reihenfolge du die Distanzen läufst. Mehrere Läufe werden nicht zusammengerechnet. 
+                  Offene Distanzen verfallen am Ende des jeweiligen Zeitraums.
                 </p>
                 <p>
                   Am {challengeDate(data.config.finale_date)} zählt ein Lauf mit
                   mindestens {data.config.finale_km} km automatisch für den
-                  Abschluss. Später hochgeladene Aktivitäten werden nach ihrem
-                  Lauftag in der Schweizer Zeitzone gewertet.
+                  Abschluss. Falls du probleme mit der Synchronisation hast, wende
+                  dich bitte an das Organisatonsteam, direkt bei WhatsApp.
                 </p>
               </details>
               <div className="sync-line">
@@ -259,23 +258,23 @@ export default function Dashboard({ user, version, refresh, authLoading }) {
                 <h2>Ein Monat, viele gemeinsame Schritte.</h2>
                 <p>
                   Jede Woche werden neue Distanzen ausgelost. Du entscheidest,
-                  an welchem Tag du welche läufst. Melde dich oben mit Strava an
-                  – dann erscheint hier deine persönliche Übersicht.
+                  an welchem Tag du welche läufst. Melde dich oben mit Strava an, 
+                  dann erscheint hier deine persönliche Übersicht.
                 </p>
               </div>
               <ol>
                 <li>
                   <b>Auslosung abwarten</b>
-                  <span>8 / 7 / 7 / 7 Distanzen pro Woche</span>
+                  <span>Jeweils 8 / 7 / 7 / 7 Distanzen pro Woche.</span>
                 </li>
                 <li>
                   <b>Eine Distanz pro Tag erledigen</b>
-                  <span>Dein längster Lauf zählt automatisch</span>
+                  <span>Dein längster Lauf zählt automatisch. Die grösste noch offene Distanz der aktuellen Woche wird abgehakt.</span>
                 </li>
                 <li>
                   <b>Gemeinsam abschliessen</b>
                   <span>
-                    Am {challengeDate(data.config.finale_date)} mit{" "}
+                    Wir werden die Challenge am {challengeDate(data.config.finale_date)} wenn möglich Gemeinsam abschliessen, mit einer Strecke von{" "}
                     {data.config.finale_km} km
                   </span>
                 </li>
