@@ -120,7 +120,7 @@ export default function Dashboard({ user, version, refresh, authLoading }) {
         ) : (
           !people.error && <RunnerLoader />
         )
-      ) : !data ? (
+      ) : !data || authLoading ? (
         !config.error && <RunnerLoader />
       ) : (
         <>

@@ -1,5 +1,61 @@
 import { test, expect } from "@playwright/test";
 
+for (const width of [1440, 390]) {
+  test(`overview waits for the personal panel before showing ready statistics (${width}px)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const response = await page.request.get("/users/");
+    const person = (await response.json()).find(
+      (user) => user.name === "Sofia Integration",
+    );
+    expect(person).toBeTruthy();
+    let releaseAuth;
+    const authGate = new Promise((resolve) => {
+      releaseAuth = resolve;
+    });
+    await page.route("**/users/me", async (route) => {
+      await authGate;
+      await route.fulfill({
+        json: {
+          ...person,
+          strava_connected: true,
+          last_synced_at: null,
+          sync_error: null,
+        },
+      });
+    });
+    const configReady = page.waitForResponse(
+      (r) => new URL(r.url()).pathname === "/challenge" && r.ok(),
+    );
+    const statsReady = page.waitForResponse(
+      (r) => new URL(r.url()).pathname === "/challenge/statistics" && r.ok(),
+    );
+    try {
+      await page.goto("/");
+      await Promise.all([configReady, statsReady]);
+      await expect(
+        page.getByRole("status", { name: "Challenge wird geladen" }),
+      ).toBeVisible();
+      await expect(page.locator(".stats-panel")).toHaveCount(0);
+      await expect(page.locator(".personal-panel")).toHaveCount(0);
+      releaseAuth();
+      await expect(
+        page.getByRole("heading", { name: "Hallo Sofia." }),
+      ).toBeVisible();
+      await expect(page.locator(".stats-panel")).toBeVisible();
+      const personal = await page.locator(".personal-panel").boundingBox();
+      const stats = await page.locator(".stats-panel").boundingBox();
+      expect(personal.y + personal.height).toBeLessThanOrEqual(stats.y);
+      await expect(
+        page.getByRole("status", { name: "Challenge wird geladen" }),
+      ).toHaveCount(0);
+    } finally {
+      releaseAuth();
+    }
+  });
+}
+
 test("overview renders before statistics, requests ranking only on demand, and reuses tab data", async ({
   page,
 }) => {
