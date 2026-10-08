@@ -6,12 +6,12 @@ export default function TestNotice({ config }) {
   return (
     <div className="notice test-banner" role="note">
       <strong>
-        Testumgebung · {challengeDate(config.starts_on)}–
+        Oktober-Probelauf · {challengeDate(config.starts_on)}–
         {challengeDate(config.finale_date)}
       </strong>
       <span>
-        Hier zählen Läufe aus dem Testzeitraum. Die produktive
-        November-Challenge hat eine separate Datenbank.
+        Hier zählen aktuell deine Oktober-Läufe. Die November-Auslosungen und
+        Ergebnisse werden separat gespeichert.
       </span>
     </div>
   );

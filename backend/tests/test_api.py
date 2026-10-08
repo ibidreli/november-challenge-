@@ -19,7 +19,7 @@ if "test" not in urlparse(test_url).path.lower():
 os.environ.update(DATABASE_URL=test_url, ENABLE_BACKGROUND_SYNC="0", ENABLE_DEBUG_ROUTES="0", REQUIRE_POSTGRES="0",
     ADMIN_PASSWORD="local-test-password", FRONTEND_URL="http://localhost:5173", CHALLENGE_YEAR="2026", COOKIE_SECURE="0",
     STRAVA_CLIENT_ID="123", STRAVA_CLIENT_SECRET="test-only", STRAVA_WEBHOOK_VERIFY_TOKEN="verify-test", STRAVA_WEBHOOK_SUBSCRIPTION_ID="1234",
-    CHALLENGE_TEST_MODE="0", CHALLENGE_TEST_START_DATE="", CHALLENGE_TEST_PERIOD_DAYS="", LOAD_ENV_FILE="0", STRAVA_SYNC_ENABLED="1")
+    CHALLENGE_MONTH="11", LOAD_ENV_FILE="0")
 
 from fastapi.testclient import TestClient
 import main
@@ -99,28 +99,46 @@ class ApiTests(unittest.TestCase):
                 "latitude": 47.37, "longitude": 8.54, "meeting_point": "Beim Bahnhof"}
 
     def october(self):
-        self.enterContext(patch.dict(os.environ, CHALLENGE_TEST_MODE="1", CHALLENGE_TEST_START_DATE="2026-10-01"))
-        Base.metadata.drop_all(engine)
-        Base.metadata.create_all(engine)
+        self.enterContext(patch.dict(os.environ, CHALLENGE_MONTH="10"))
         with SessionLocal() as db:
             challenge.seed(db)
-        self.today.return_value = date(2026, 10, 7)
-        self.admin = {"X-Admin-Token": self.client.post("/admin/login", json={"password": "local-test-password"}).json()["token"]}
+        self.today.return_value = date(2026, 10, 8)
 
-    def test_production_calendar_unchanged_and_rejects_test_database_reuse(self):
-        from services.schedule import ScheduleConfigurationError
-        config = self.client.get("/challenge").json()
-        self.assertFalse(config["test_mode"])
-        self.assertEqual((config["starts_on"], config["finale_date"]), ("2026-11-01", "2026-11-30"))
-        self.assertEqual([p["capacity"] for p in config["periods"]], [8, 7, 7, 7])
-        self.assertEqual(self.client.put("/admin/challenge/test-calendar", headers=self.admin,
-            json={"starts_on": "2026-10-01", "period_days": [8, 7, 7, 7]}).status_code, 403)
-        with patch.dict(os.environ, CHALLENGE_TEST_MODE="1"):
+    def test_month_switch_preserves_november_results_draws_and_login(self):
+        self.publish(); uid = self.add_user(strava_id=99)
+        self.add_run(uid, 35, 1, sid=900)
+        token = self.authorize(uid)
+        november = self.client.get("/admin/challenge", headers=self.admin).json()
+        with patch.dict(os.environ, CHALLENGE_MONTH="10"):
+            with SessionLocal() as db: challenge.seed(db)
+            self.assertEqual(self.client.get("/users/me").json()["total_score"], 0)
+            self.publish(distances=[1, 2, 3, 4, 5, 6, 7, 8])
             with SessionLocal() as db:
-                with self.assertRaises(ScheduleConfigurationError): challenge.seed(db)
-        after = self.client.get("/challenge").json()
-        self.assertEqual({k: v for k, v in after.items() if k != "server_now"},
-                         {k: v for k, v in config.items() if k != "server_now"})
+                db.add(Activity(user_id=uid, date=date(2026, 10, 1), distance_km=7,
+                    strava_id="901", status="pending"))
+                db.flush(); challenge.rebuild_user(db, uid); db.commit()
+                self.assertEqual(db.get(User, uid).refresh_token, "refresh-secret")
+                self.assertIsNotNone(db.get(AuthSession, digest(token)))
+            self.assertEqual(self.client.get("/users/me").json()["total_score"], 7)
+            self.assertEqual(self.client.get("/challenge/statistics").json()["total_km"], 7)
+        with SessionLocal() as db: challenge.seed(db)
+        self.assertEqual(self.client.get("/users/me").json()["total_score"], 29)
+        self.assertEqual(self.client.get("/challenge/statistics").json()["total_km"], 29)
+        restored = self.client.get("/admin/challenge", headers=self.admin).json()
+        self.assertEqual(restored["periods"], november["periods"])
+        self.assertEqual(restored["finale_km"], november["finale_km"])
+        with patch.dict(os.environ, CHALLENGE_MONTH="10"):
+            with SessionLocal() as db: challenge.seed(db)
+            self.assertEqual(self.client.get("/users/me").json()["total_score"], 7)
+
+    def test_default_month_and_invalid_settings(self):
+        from services.schedule import active_month, ScheduleConfigurationError
+        with patch.dict(os.environ):
+            os.environ.pop("CHALLENGE_MONTH", None)
+            self.assertEqual(active_month(), 11)
+        for value in ("0", "9", "12", "abc"):
+            with patch.dict(os.environ, CHALLENGE_MONTH=value):
+                with self.assertRaises(ScheduleConfigurationError): active_month()
 
     def test_october_import_scorer_admin_and_chart_share_calendar(self):
         self.october(); self.publish(); uid = self.add_user(strava_id=99)
@@ -147,69 +165,26 @@ class ApiTests(unittest.TestCase):
         with SessionLocal() as db:
             self.assertEqual(db.query(Activity).filter_by(strava_id="900").one().status, "pending")
 
-    def test_short_october_rehearsal_week_changes_and_finale(self):
+    def test_october_finale_and_manual_date_bounds(self):
         self.october()
-        change = self.client.put("/admin/challenge/test-calendar", headers=self.admin,
-            json={"starts_on": "2026-10-01", "period_days": [1, 1, 1, 1]})
-        self.assertEqual(change.status_code, 200, change.text)
-        self.assertEqual(change.json()["finale_date"], "2026-10-05")
-        self.publish()
-        self.publish(2, [1, 2, 3, 4, 7, 8, 10])
-        self.publish(3, [11, 12, 13, 16, 17, 18, 20])
-        self.publish(4, [21, 22, 23, 25, 26, 28, 30])
         uid = self.add_user(strava_id=99)
-        data = [{**run_data(100 + day, km, day), "start_date": f"2026-10-{day:02d}T08:00:00Z"} for day, km in [(1, 35), (2, 35), (3, 35), (4, 35), (5, 15)]]
-        self.today.return_value = date(2026, 10, 4)
-        with patch("services.strava.requests.get", return_value=reply(data)):
+        self.publish(4, [1, 2, 3, 4, 7, 8, 10])
+        self.today.return_value = date(2026, 10, 31)
+        runs = [run_data(11, 15, start_date="2026-10-29T08:00:00Z"),
+                run_data(12, 14, start_date="2026-10-30T08:00:00Z")]
+        with patch("services.strava.requests.get", return_value=reply(runs)):
             with SessionLocal() as db: strava.sync_user(db, uid)
-        self.assertEqual(self.result(uid)["total_score"], 89)  # No future finale credit.
-        self.today.return_value = date(2026, 10, 7)
-        with SessionLocal() as db:
-            challenge.rebuild_user(db, uid); db.commit()
-        self.assertEqual(self.result(uid)["total_score"], 104)
-        self.assertEqual(self.result(uid)["cells"][14]["status"], "completed")
-        self.assertEqual(len(self.client.get("/challenge/statistics").json()["points"]), 5)
+        self.assertEqual(self.result(uid)["total_score"], 10)
+        runs.append(run_data(13, 15, start_date="2026-10-30T09:00:00Z"))
+        with patch("services.strava.requests.get", return_value=reply(runs)):
+            with SessionLocal() as db: strava.sync_user(db, uid)
+        self.assertEqual(self.result(uid)["total_score"], 25)
+        self.assertEqual(self.result(uid)["cells"][14]["completed_on"], "2026-10-30")
+        for day in ("2026-09-30", "2026-10-31", "2026-11-01"):
+            self.assertEqual(self.client.post("/admin/activities", headers=self.admin,
+                json={"user_id": uid, "date": day, "distance_km": 35}).status_code, 422)
         self.assertEqual(self.client.put("/admin/challenge/test-calendar", headers=self.admin,
-            json={"starts_on": "2026-10-02", "period_days": [1, 1, 1, 1]}).status_code, 409)
-        self.assertEqual(self.client.put("/admin/challenge/finale", headers=self.admin, json={"km": 16}).status_code, 409)
-        with SessionLocal() as db: challenge.seed(db)  # Restart keeps the saved calendar.
-        self.assertEqual(self.client.get("/challenge").json()["finale_date"], "2026-10-05")
-
-    def test_test_calendar_validation_and_manual_date_bounds(self):
-        self.october()
-        for body in ({"starts_on": "2026-12-29", "period_days": [8, 7, 7, 7]},
-                     {"starts_on": "2026-10-01", "period_days": [0, 7, 7, 7]},
-                     {"starts_on": "2026-10-01", "period_days": [True, 7, 7, 7]},
-                     {"starts_on": "2026-10-01", "period_days": [8, 7, 7]}):
-            self.assertEqual(self.client.put("/admin/challenge/test-calendar", headers=self.admin, json=body).status_code, 422)
-        uid = self.add_user()
-        response = self.client.post("/admin/activities", headers=self.admin,
-            json={"user_id": uid, "date": "2026-09-30", "distance_km": 35})
-        self.assertEqual(response.status_code, 422)
-
-    def test_test_database_cannot_be_reopened_as_production(self):
-        self.october()
-        from services.schedule import ScheduleConfigurationError
-        with patch.dict(os.environ, CHALLENGE_TEST_MODE="0", CHALLENGE_TEST_START_DATE=""):
-            with SessionLocal() as db:
-                with self.assertRaises(ScheduleConfigurationError): challenge.seed(db)
-
-    def test_test_settings_require_explicit_test_mode(self):
-        from services.schedule import ScheduleConfigurationError, initial_calendar
-        with patch.dict(os.environ, CHALLENGE_TEST_START_DATE="2026-10-01"):
-            with self.assertRaises(ScheduleConfigurationError): initial_calendar(2026, False)
-
-    def test_paused_strava_disables_scheduler_manual_import_and_webhook_worker(self):
-        uid = self.add_user(strava_id=99); self.authorize(uid)
-        with patch.dict(os.environ, STRAVA_SYNC_ENABLED="0"), patch("services.strava.api_get") as request:
-            strava.sync_user_background(uid)
-            strava.sync_all_background()
-            strava.webhook_background(99, 9, "update")
-            request.assert_not_called()
-            self.assertEqual(self.client.post("/users/me/sync").status_code, 409)
-            self.assertEqual(self.client.post("/admin/sync", headers=self.admin).status_code, 409)
-            self.assertTrue(self.client.get("/users/me").json()["sync_paused"])
-            self.assertFalse(self.client.get("/challenge").json()["strava_sync_enabled"])
+            json={"starts_on": "2026-10-01", "period_days": [8, 7, 7, 7]}).status_code, 404)
 
     def test_sync_http_diagnostics_hide_credentials_and_preserve_claims(self):
         import requests
@@ -239,10 +214,78 @@ class ApiTests(unittest.TestCase):
             migrations.migrate(); migrations.migrate()
         with legacy.connect() as conn:
             self.assertEqual(conn.scalar(text("SELECT year FROM challenge_editions")), 2026)
-            self.assertFalse(conn.scalar(text("SELECT is_test FROM challenge_editions")))
+            self.assertEqual(conn.scalar(text("SELECT month FROM challenge_editions")), 11)
             self.assertIsNone(conn.scalar(text("SELECT finale_on FROM challenge_editions")))
             self.assertIn("finale_on", {c["name"] for c in inspect(conn).get_columns("challenge_editions")})
         legacy.dispose()
+
+    def check_month_migration_preserves_relations(self, legacy):
+        from sqlalchemy import text
+        from sqlalchemy.orm import Session
+        from models.challenge import ChallengeEdition, ChallengePeriod
+        import migrations
+        id_type = "SERIAL" if legacy.dialect.name == "postgresql" else "INTEGER"
+        with legacy.begin() as conn:
+            conn.execute(text("CREATE TABLE schema_migrations (revision VARCHAR(80) PRIMARY KEY)"))
+            conn.execute(text("INSERT INTO schema_migrations VALUES ('2026_02_weekly')"))
+            conn.execute(text("INSERT INTO schema_migrations VALUES ('2026_03_test_calendar')"))
+            conn.execute(text(f"CREATE TABLE challenge_editions (id {id_type} PRIMARY KEY, year INTEGER UNIQUE NOT NULL, timezone VARCHAR, finale_km INTEGER, is_test BOOLEAN NOT NULL DEFAULT FALSE, finale_on DATE)"))
+            conn.execute(text("INSERT INTO challenge_editions (year,timezone,finale_km,finale_on) VALUES (2026,'Europe/Zurich',15,'2026-11-30')"))
+        Base.metadata.create_all(legacy)
+        with Session(legacy) as db:
+            u = User(name="Keep login", refresh_token="keep-refresh", total_score=465)
+            db.add(u); db.flush(); uid = u.id
+            a = Activity(user_id=uid, date=date(2026, 11, 1), distance_km=35, effective_km=29, status="claimed")
+            p = ChallengePeriod(edition_id=1, number=1, starts_on=date(2026, 11, 1), ends_on=date(2026, 11, 8),
+                draw_on=date(2026, 10, 31), capacity=8, draft_distances=DRAW, published_at=utcnow())
+            db.add_all([a, p]); db.flush()
+            target = DistanceTarget(edition_id=1, period_id=p.id, km=29)
+            db.add(target); db.flush()
+            db.add(ChallengeClaim(user_id=uid, edition_id=1, target_id=target.id, activity_id=a.id, date=a.date, km=29))
+            token = issue_session(db, user_id=uid)
+            db.commit()
+        with patch("migrations.engine", legacy):
+            migrations.migrate(); migrations.migrate()
+        with Session(legacy) as db:
+            with patch.dict(os.environ, CHALLENGE_MONTH="10"):
+                challenge.seed(db)
+                self.assertNotEqual(challenge.edition(db).id, 1)
+            challenge.seed(db)
+            self.assertEqual(challenge.edition(db).id, 1)
+            self.assertEqual(db.get(ChallengeEdition, 1).month, 11)
+            self.assertEqual(db.query(ChallengeEdition).count(), 2)
+            self.assertEqual(db.query(ChallengeClaim).one().km, 29)
+            self.assertEqual(db.query(ChallengePeriod).filter_by(edition_id=1).one().draft_distances, DRAW)
+            self.assertEqual(db.get(User, uid).refresh_token, "keep-refresh")
+            self.assertEqual(db.get(User, uid).total_score, 465)
+            self.assertIsNotNone(db.get(AuthSession, digest(token)))
+        if legacy.dialect.name == "sqlite":
+            with legacy.connect() as conn:
+                self.assertEqual(conn.exec_driver_sql("PRAGMA foreign_keys").scalar(), 1)
+                self.assertIsNone(conn.exec_driver_sql("PRAGMA foreign_key_check").first())
+
+    def test_sqlite_month_migration_preserves_relations(self):
+        from sqlalchemy import create_engine
+        legacy = create_engine("sqlite:///" + str(Path(temporary.name) / "month-relations-test.db"))
+        try:
+            self.check_month_migration_preserves_relations(legacy)
+        finally:
+            legacy.dispose()
+
+    @unittest.skipUnless(engine.dialect.name == "postgresql", "PostgreSQL migration test")
+    def test_postgres_month_migration_preserves_relations(self):
+        from sqlalchemy import create_engine, text
+        import secrets
+        schema = "month_migration_test_" + secrets.token_hex(4)
+        with engine.begin() as conn:
+            conn.execute(text(f"CREATE SCHEMA {schema}"))
+        legacy = create_engine(test_url, connect_args={"options": "-csearch_path=" + schema})
+        try:
+            self.check_month_migration_preserves_relations(legacy)
+        finally:
+            legacy.dispose()
+            with engine.begin() as conn:
+                conn.execute(text(f"DROP SCHEMA {schema} CASCADE"))
 
     def test_public_contract_and_no_credentials(self):
         uid = self.add_user(strava_id=99)

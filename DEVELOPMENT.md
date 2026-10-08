@@ -30,7 +30,7 @@ Die beiden Startbefehle in eigenen Terminals ausführen. Für lokale Entwicklung
 | Strava-Import und Token-Erneuerung | `backend/services/strava.py` |
 | Datenbankänderungen | `backend/models/` und `backend/migrations.py` |
 
-Die Abschlussdistanz und ausgeloste Distanzen werden über `/admin` geändert, ohne Code oder Deployment. `CHALLENGE_YEAR` bestimmt die aktive Edition. Produktiv gelten weiterhin die November-Zeiträume. Eine separate Testdatenbank kann mit `CHALLENGE_TEST_MODE=1` auf Oktober eingestellt werden; Import, Wertung, Admin und Diagramm verwenden denselben gespeicherten Kalender. Ablauf mit derselben Strava-App: [OCTOBER_TEST.md](OCTOBER_TEST.md).
+Die Abschlussdistanz und ausgeloste Distanzen werden über `/admin` geändert, ohne Code oder Deployment. `CHALLENGE_YEAR` und `CHALLENGE_MONTH` bestimmen die aktive Edition. Standard ist November (`11`); für einen Oktober-Probelauf auf derselben Website `10` setzen. Die bestehende Datenbank hält Auslosungen und Punkte je Jahr/Monat getrennt; Strava-Verbindungen und Sitzungen bleiben gemeinsam. Ablauf: [OCTOBER_TEST.md](OCTOBER_TEST.md).
 
 ## Tests
 
@@ -61,7 +61,7 @@ npm run build
 npm run build:ui
 ```
 
-`npm test` startet selbst lokale Dienste auf 5178, 5179, 5180, 8021 und 8022; diese Ports müssen frei sein. Die Python-Umgebung muss wie im README eingerichtet sein. Alternativer Interpreter: Umgebungsvariable `PYTHON`. Die Integration verwendet temporäre Datenbanken und ausschliesslich lokale Test-Sitzungen. Sie verbindet kein echtes Strava-Konto. Screenshots landen in `output/verification/`, Fehlerdetails in `frontend/test-results/`.
+`npm test` startet selbst lokale Dienste auf 5178, 5179 und 8021; diese Ports müssen frei sein. Die Python-Umgebung muss wie im README eingerichtet sein. Alternativer Interpreter: Umgebungsvariable `PYTHON`. Die Integration verwendet eine temporäre Datenbank und ausschliesslich lokale Test-Sitzungen. Sie verbindet kein echtes Strava-Konto. Screenshots landen in `output/verification/`, Fehlerdetails in `frontend/test-results/`.
 
 ## Kleine Änderungen schnell beurteilen
 

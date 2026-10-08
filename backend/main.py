@@ -1,14 +1,11 @@
 import asyncio
 import logging
 import os
-from pathlib import Path
 from contextlib import asynccontextmanager
 from urllib.parse import urlsplit
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 
 if os.getenv("LOAD_ENV_FILE", "0") == "1":
     from dotenv import load_dotenv
@@ -41,7 +38,7 @@ except Exception as exc:
 @asynccontextmanager
 async def lifespan(app):
     task = None
-    if DB_AVAILABLE and os.getenv("ENABLE_BACKGROUND_SYNC", "1") == "1" and os.getenv("STRAVA_SYNC_ENABLED", "1") == "1":
+    if DB_AVAILABLE and os.getenv("ENABLE_BACKGROUND_SYNC", "1") == "1":
         from tasks.sync_scheduler import background_sync_loop
         task = asyncio.create_task(background_sync_loop())
     try:
@@ -55,14 +52,6 @@ async def lifespan(app):
                 pass
 
 app = FastAPI(title="November Challenge API", version="2026.1", lifespan=lifespan)
-# The separate October Docker image serves UI and API on one host, including cookies.
-# Production's existing static-site/backend split stays the default.
-frontend_directory = os.getenv("SERVE_FRONTEND_DIRECTORY", "")
-frontend_path = Path(frontend_directory).resolve() if frontend_directory else None
-if frontend_path:
-    if not (frontend_path / "index.html").is_file():
-        raise RuntimeError("SERVE_FRONTEND_DIRECTORY must contain a built frontend")
-    app.mount("/assets", StaticFiles(directory=frontend_path / "assets"), name="frontend-assets")
 origins = {"http://localhost:5173", "http://127.0.0.1:5173"} if not os.getenv("RENDER") else set()
 for env in ("FRONTEND_URL", "CUSTOM_DOMAIN", "ALLOWED_ORIGINS"):
     origins.update(value.strip().rstrip("/") for value in os.getenv(env, "").split(",") if value.strip())
@@ -97,15 +86,7 @@ if DB_AVAILABLE:
 
 @app.get("/")
 def root():
-    if frontend_path:
-        return FileResponse(frontend_path / "index.html", headers={"Cache-Control": "no-cache"})
     return {"message": "November Challenge API", "version": "2026.1"}
-
-if frontend_path:
-    @app.get("/admin", include_in_schema=False)
-    @app.get("/admin/", include_in_schema=False)
-    def admin_page():
-        return FileResponse(frontend_path / "index.html", headers={"Cache-Control": "no-store"})
 
 @app.get("/healthz")
 def healthz():

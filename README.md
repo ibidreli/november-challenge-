@@ -1,6 +1,6 @@
 # November Jogging Challenge
 
-Oktober-Probelauf mit derselben Strava-App: [OCTOBER_TEST.md](OCTOBER_TEST.md). Separate Testdatenbank, konfigurierbarer Kalender und sichtbarer Testhinweis; November bleibt der produktive Standard.
+Oktober direkt auf der bestehenden Website testen: [OCTOBER_TEST.md](OCTOBER_TEST.md). `CHALLENGE_MONTH=10` aktiviert den Probelauf; `11` stellt November wieder her. Bestehende Datenbank, Domains und Strava-App bleiben gleich.
 
 React/Vite, FastAPI und PostgreSQL. Umsetzung für November 2026 mit Wochen-Auslosungen, automatischer Strava-Wertung, gemeinsamer Kilometerkurve und Läufergruppen mit Karte. Die vorhandenen Logos werden verwendet.
 

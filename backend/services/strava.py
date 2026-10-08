@@ -147,8 +147,6 @@ def sync_user(db, user_id):
     db.commit()
 
 def sync_user_background(user_id):
-    if os.getenv("STRAVA_SYNC_ENABLED", "1") != "1":
-        return
     with sync_lock(user_id) as acquired:
         if not acquired:
             return
@@ -176,8 +174,6 @@ def sync_user_background(user_id):
                     db.commit()
 
 def sync_all_background(due_only=False):
-    if os.getenv("STRAVA_SYNC_ENABLED", "1") != "1":
-        return
     with SessionLocal() as db:
         query = select(User.id).where(User.refresh_token.is_not(None))
         if due_only:
@@ -187,8 +183,6 @@ def sync_all_background(due_only=False):
         sync_user_background(uid)
 
 def webhook_background(owner_id, activity_id, aspect):
-    if os.getenv("STRAVA_SYNC_ENABLED", "1") != "1":
-        return
     with SessionLocal() as db:
         uid = db.scalar(select(User.id).where(User.strava_id == owner_id))
     if not uid:

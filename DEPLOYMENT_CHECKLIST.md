@@ -1,6 +1,6 @@
 # Bestehende Render-Dienste aktualisieren
 
-Für den isolierten Oktober-Probelauf mit der bestehenden Strava-App gilt die zusätzliche Anleitung [OCTOBER_TEST.md](OCTOBER_TEST.md). Die folgende Anleitung beschreibt weiterhin die produktive November-Seite.
+Für einen Oktober-Probelauf auf derselben Website genügt `CHALLENGE_MONTH=10` am bestehenden Backend; mit `11` zurückwechseln. Ablauf: [OCTOBER_TEST.md](OCTOBER_TEST.md). Die folgende Anleitung beschreibt die November-Seite.
 
 Die vorhandene Struktur bleibt erhalten: **frontend** als Static Site, **backend** als Docker-Web-Service, **database** als PostgreSQL. Es werden keine neuen Render-Dienste benötigt. Die folgenden Einstellungen sind vorbereitet; DNS und Render müssen im jeweiligen Konto gesetzt werden.
 
@@ -23,8 +23,7 @@ Im bestehenden Backend-Service unter **Settings → Custom Domains** `api.novjog
 | `COOKIE_SECURE` | `1` |
 | `FORWARDED_ALLOW_IPS` | `*` hinter dem Render-Proxy, damit HTTPS und Client-IP korrekt erkannt werden |
 | `CHALLENGE_YEAR` | `2026` |
-| `CHALLENGE_TEST_MODE` | `0` auf dem produktiven Backend |
-| `STRAVA_SYNC_ENABLED` | `1`; während des Oktober-Tests nach dessen Anleitung vorübergehend `0` |
+| `CHALLENGE_MONTH` | `11` für November; `10` für einen Probelauf auf derselben Website |
 | `ADMIN_PASSWORD` | Eigenes starkes Passwort, nur als geheime Render-Variable |
 | `STRAVA_CLIENT_ID` | Bestehende Strava-App |
 | `STRAVA_CLIENT_SECRET` | Geheimnis dieser App, nur im Backend |

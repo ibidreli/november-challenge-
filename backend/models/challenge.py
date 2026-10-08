@@ -1,14 +1,15 @@
-from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey, JSON, UniqueConstraint, CheckConstraint, Boolean, false
+from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey, JSON, UniqueConstraint, CheckConstraint
 from database import Base
 
 class ChallengeEdition(Base):
     __tablename__ = "challenge_editions"
     id = Column(Integer, primary_key=True)
-    year = Column(Integer, unique=True, nullable=False)
+    year = Column(Integer, nullable=False)
+    month = Column(Integer, nullable=False, default=11, server_default="11")
     timezone = Column(String(50), nullable=False, default="Europe/Zurich")
     finale_km = Column(Integer, nullable=False, default=15)
-    is_test = Column(Boolean, nullable=False, default=False, server_default=false())
     finale_on = Column(Date, nullable=True)
+    __table_args__ = (UniqueConstraint("year", "month", name="uq_challenge_editions_year_month"),)
 
 class ChallengePeriod(Base):
     __tablename__ = "challenge_periods"

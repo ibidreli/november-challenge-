@@ -200,47 +200,41 @@ export default function Dashboard({ user, version, refresh, authLoading }) {
               <details className="rules">
                 <summary>So zählt dein Lauf</summary>
                 <p>
-                  Pro Tag zählt dein längster einzelner Lauf. 
-                  Dabei wird die grösste noch offene Distanz der aktuellen Woche abgehakt, die du mit diesem Lauf erreicht oder übertroffen hast. 
-                  Du entscheidest selbst, in welcher Reihenfolge du die Distanzen läufst. Mehrere Läufe werden nicht zusammengerechnet. 
-                  Offene Distanzen verfallen am Ende des jeweiligen Zeitraums.
+                  Pro Tag zählt dein längster einzelner Lauf. Dabei wird die
+                  grösste noch offene Distanz der aktuellen Woche abgehakt, die
+                  du mit diesem Lauf erreicht oder übertroffen hast. Du
+                  entscheidest selbst, in welcher Reihenfolge du die Distanzen
+                  läufst. Mehrere Läufe werden nicht zusammengerechnet. Offene
+                  Distanzen verfallen am Ende des jeweiligen Zeitraums.
                 </p>
                 <p>
                   Am {challengeDate(data.config.finale_date)} zählt ein Lauf mit
                   mindestens {data.config.finale_km} km automatisch für den
-                  Abschluss. Falls du probleme mit der Synchronisation hast, wende
-                  dich bitte an das Organisatonsteam, direkt bei WhatsApp.
+                  Abschluss. Falls du probleme mit der Synchronisation hast,
+                  wende dich bitte an das Organisatonsteam, direkt bei WhatsApp.
                 </p>
               </details>
               <div className="sync-line">
                 <span className="muted">
-                  {user.sync_paused
-                    ? "Strava-Import ist pausiert."
-                    : user.last_synced_at
-                      ? `Letzte Synchronisation: ${new Date(user.last_synced_at).toLocaleString("de-CH", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Zurich" })}`
-                      : "Deine Strava-Läufe werden im Hintergrund geladen."}
+                  {user.last_synced_at
+                    ? `Letzte Synchronisation: ${new Date(user.last_synced_at).toLocaleString("de-CH", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Zurich" })}`
+                    : "Deine Strava-Läufe werden im Hintergrund geladen."}
                 </span>
                 <button
                   className="text-button"
-                  disabled={syncing || user.sync_paused}
+                  disabled={syncing}
                   onClick={sync}
                 >
                   {syncing ? "Wird gestartet …" : "Strava synchronisieren"}
                 </button>
               </div>
-              {user.sync_paused && (
-                <p className="notice">
-                  Die Strava-Synchronisierung ist auf dieser Seite vorübergehend
-                  pausiert.
-                </p>
-              )}
-              {!user.strava_connected && !user.sync_paused && (
+              {!user.strava_connected && (
                 <p className="notice">
                   Die Strava-Verbindung muss erneuert werden.{" "}
                   <a href={loginUrl()}>Strava erneut verbinden</a>.
                 </p>
               )}
-              {user.sync_error && !user.sync_paused && (
+              {user.sync_error && (
                 <p className="notice" role="status">
                   {user.sync_error}
                 </p>
@@ -258,8 +252,8 @@ export default function Dashboard({ user, version, refresh, authLoading }) {
                 <h2>Ein Monat, viele gemeinsame Schritte.</h2>
                 <p>
                   Jede Woche werden neue Distanzen ausgelost. Du entscheidest,
-                  an welchem Tag du welche läufst. Melde dich oben mit Strava an, 
-                  dann erscheint hier deine persönliche Übersicht.
+                  an welchem Tag du welche läufst. Melde dich oben mit Strava
+                  an, dann erscheint hier deine persönliche Übersicht.
                 </p>
               </div>
               <ol>
@@ -269,12 +263,17 @@ export default function Dashboard({ user, version, refresh, authLoading }) {
                 </li>
                 <li>
                   <b>Eine Distanz pro Tag erledigen</b>
-                  <span>Dein längster Lauf zählt automatisch. Die grösste noch offene Distanz der aktuellen Woche wird abgehakt.</span>
+                  <span>
+                    Dein längster Lauf zählt automatisch. Die grösste noch
+                    offene Distanz der aktuellen Woche wird abgehakt.
+                  </span>
                 </li>
                 <li>
                   <b>Gemeinsam abschliessen</b>
                   <span>
-                    Wir werden die Challenge am {challengeDate(data.config.finale_date)} wenn möglich Gemeinsam abschliessen, mit einer Strecke von{" "}
+                    Wir werden die Challenge am{" "}
+                    {challengeDate(data.config.finale_date)} wenn möglich
+                    Gemeinsam abschliessen, mit einer Strecke von{" "}
                     {data.config.finale_km} km
                   </span>
                 </li>

@@ -8,10 +8,11 @@ from models.user import User
 from models.activity import Activity
 from models.challenge import ChallengeEdition, ChallengePeriod, DistanceTarget, ChallengeClaim
 from services.time import local_today, utcnow, iso_utc
-from services.schedule import CAPACITIES, ScheduleConfigurationError, test_mode_enabled, initial_calendar, calendar, bounds, finale_date
+from services.schedule import CAPACITIES, active_month, initial_calendar, bounds, finale_date
 
 def edition(db, lock=False):
-    query = select(ChallengeEdition).where(ChallengeEdition.year == int(os.getenv("CHALLENGE_YEAR", "2026")))
+    query = select(ChallengeEdition).where(ChallengeEdition.year == int(os.getenv("CHALLENGE_YEAR", "2026")),
+                                           ChallengeEdition.month == active_month())
     if lock:
         query = query.with_for_update().execution_options(populate_existing=True)
     result = db.scalar(query)
@@ -21,18 +22,15 @@ def edition(db, lock=False):
 
 def seed(db):
     year = int(os.getenv("CHALLENGE_YEAR", "2026"))
-    is_test = test_mode_enabled()
-    spans, finale = initial_calendar(year, is_test)
+    month = active_month()
+    spans, finale = initial_calendar(year, month)
     # The migration lock also protects initial edition creation on concurrent starts.
     if db.bind.dialect.name == "postgresql":
         from sqlalchemy import text
         db.execute(text("SELECT pg_advisory_xact_lock(2026100701)"))
-    existing = db.scalars(select(ChallengeEdition)).all()
-    if any(bool(e.is_test) != is_test for e in existing):
-        raise ScheduleConfigurationError("Test and production editions require separate databases. Check DATABASE_URL and CHALLENGE_TEST_MODE.")
-    if any(e.year == year for e in existing):
+    if db.scalar(select(ChallengeEdition).where(ChallengeEdition.year == year, ChallengeEdition.month == month)):
         return
-    e = ChallengeEdition(year=year, finale_km=15, is_test=is_test, finale_on=finale)
+    e = ChallengeEdition(year=year, month=month, finale_km=15, finale_on=finale)
     db.add(e)
     db.flush()
     for n, ((start, end), count) in enumerate(zip(spans, CAPACITIES), 1):
@@ -48,9 +46,8 @@ def configuration(db, admin=False):
     e = edition(db)
     today = local_today()
     first, last = bounds(db, e)
-    result = {"year": e.year, "timezone": e.timezone, "finale_km": e.finale_km,
-              "test_mode": bool(e.is_test), "starts_on": first.isoformat(),
-              "strava_sync_enabled": os.getenv("STRAVA_SYNC_ENABLED", "1") == "1",
+    result = {"year": e.year, "month": e.month, "timezone": e.timezone, "finale_km": e.finale_km,
+              "test_mode": e.month == 10, "starts_on": first.isoformat(),
               "finale_date": last.isoformat(), "server_date": today.isoformat(),
               "server_now": iso_utc(utcnow()), "periods": []}
     for p in periods(db, e):
@@ -145,7 +142,6 @@ def participant(db, user, claims=None, targets=None, ps=None, personal=False):
         result["strava_connected"] = bool(user.refresh_token)
         result["last_synced_at"] = iso_utc(user.last_synced_at)
         result["sync_error"] = user.last_sync_error
-        result["sync_paused"] = os.getenv("STRAVA_SYNC_ENABLED", "1") != "1"
     return result
 
 def leaderboard(db):
@@ -225,25 +221,5 @@ def set_finale(db, km):
     if db.query(ChallengeClaim).filter_by(target_id=t.id).first():
         raise HTTPException(409, "Der Abschlusslauf hat bereits Ergebnisse.")
     t.km, e.finale_km = km, km
-    db.commit()
-    return configuration(db, admin=True)
-
-
-def set_test_calendar(db, starts_on, period_days):
-    e = edition(db, lock=True)
-    if not e.is_test:
-        raise HTTPException(403, "Testzeiträume können nur in einer separaten Testumgebung geändert werden.")
-    ps = periods(db, e)
-    if any(p.published_at for p in ps):
-        raise HTTPException(409, "Den Testkalender vor der ersten Veröffentlichung festlegen. Veröffentlichte Zeiträume bleiben gesperrt.")
-    try:
-        spans, finale = calendar(starts_on, period_days, e.year)
-    except (ScheduleConfigurationError, OverflowError):
-        raise HTTPException(422, "Bitte vier Zeiträume mit je 1–31 Tagen innerhalb des Challenge-Jahres wählen.") from None
-    for p, (start, end) in zip(ps, spans):
-        p.starts_on, p.ends_on, p.draw_on = start, end, start - timedelta(days=1)
-    e.finale_on = finale
-    db.flush()
-    rebuild_all(db, e)
     db.commit()
     return configuration(db, admin=True)

@@ -1,5 +1,4 @@
-import os
-from fastapi import APIRouter, BackgroundTasks, Depends, Request, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from sqlalchemy.orm import Session
 from database import get_db
 from services.challenge import participant, leaderboard
@@ -18,8 +17,6 @@ def users(db: Session = Depends(get_db)):
 
 @router.post("/me/sync", status_code=202)
 def sync(request: Request, tasks: BackgroundTasks, user=Depends(require_user), db: Session = Depends(get_db)):
-    if os.getenv("STRAVA_SYNC_ENABLED", "1") != "1":
-        raise HTTPException(409, "Die Strava-Synchronisierung ist auf dieser Seite vorübergehend pausiert.")
     limit(db, request, "personal_sync", 6)
     from services.strava import sync_user_background
     tasks.add_task(sync_user_background, user.id)

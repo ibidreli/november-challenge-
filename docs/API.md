@@ -29,7 +29,6 @@ Interaktive Schemas und Beispiele: Backend `/docs`. Öffentliche API liefert nur
 | GET / POST | `/admin/users` | Teilnehmer lesen / mit `{name}` anlegen |
 | PUT / DELETE | `/admin/users/{id}` | Name mit `{name}` ändern / Teilnehmer samt Daten löschen |
 | GET / POST | `/admin/activities` | Aktivitäten des aktiven Kalenders / manuelle Tageskorrektur |
-| PUT | `/admin/challenge/test-calendar` | Nur Testumgebung: `{starts_on, period_days:[8,7,7,7]}`, vor erster Veröffentlichung |
 | PUT / DELETE | `/admin/activities/{id}` | Manuelle Aktivität ändern / Aktivität ausschliessen |
 | POST | `/admin/activities/{id}/restore` | Admin-Ausschluss rückgängig machen |
 | POST | `/admin/sync` | Vollständigen Strava-Import im Hintergrund starten (202) |

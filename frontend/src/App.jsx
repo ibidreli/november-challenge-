@@ -81,7 +81,7 @@ export default function App() {
                   : undefined
               }
             >
-              Mit Strava anmelden <span aria-hidden="true">↗</span>
+              Mit Strava anmelden
             </a>
           )}
         </div>

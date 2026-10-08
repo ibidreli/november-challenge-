@@ -1,153 +1,52 @@
-# Oktober-Test mit der bestehenden Strava-App
+# Oktober direkt auf der bestehenden Website testen
 
-Der Test erhält eine eigene PostgreSQL-Datenbank und einen Docker-Web-Service. Dieser liefert Frontend und Backend unter **test.novjogcha.ch** aus. Die bestehenden Dienste `frontend`, `backend` und `database` bleiben bestehen. Keine zweite Strava-App nötig. Beim Anlegen der zusätzlichen Render-Ressourcen den angezeigten Tarif prüfen.
+Du verwendest weiterhin **novjogcha.ch**, die vorhandenen Render-Dienste und dieselbe Strava-App. Die bestehende Datenbank speichert Auslosungen und Punkte für Oktober und November getrennt. Strava-Verbindungen und Website-Anmeldungen bleiben gemeinsam bestehen.
 
-## 1. Änderungen pushen
+## Einmalig die vereinfachte Version veröffentlichen
+
+Im Projektordner:
 
 ```powershell
-git status
 git add .
-git diff --cached --stat
-git commit -m "Add isolated October challenge rehearsal"
+git commit -m "Simplify October testing on the existing website"
 git push origin main
 ```
 
-Vor dem Commit prüfen, dass keine geheimen `.env`-Dateien enthalten sind. Das normale Deployment bleibt im November. Beim vorhandenen Backend **CHALLENGE_TEST_MODE nicht auf 1 setzen**. Die Migration ergänzt Kalenderfelder und erhält bestehende November-Auslosungen und Ergebnisse.
+Auf erfolgreiche Deployments von **backend** und **frontend** warten. Bei ausgeschaltetem Auto-Deploy jeweils **Manual Deploy → Deploy latest commit** verwenden. Die Datenbankmigration läuft automatisch; keine Datenbank neu anlegen oder zurücksetzen.
 
-## 2. Strava-Abrufe auf der Hauptseite pausieren
+## Oktober einschalten
 
-Nachdem das bestehende Backend den neuen Commit erfolgreich deployt hat: **Render → bestehendes backend → Environment → Edit → STRAVA_SYNC_ENABLED=0**, speichern und deployen.
+**Render → bestehendes backend → Environment → Edit**:
 
-Diese Pause stoppt Hintergrundimport, manuelle Synchronisation und Webhook-Import. `ENABLE_BACKGROUND_SYNC=0` allein würde Webhooks nicht stoppen. Website-Sitzungen und Gast-Läufergruppen bleiben verfügbar. Verwende dein Strava-Konto während des Tests auf der Testseite.
-
-Strava erneuert Refresh-Tokens; ältere Tokens desselben Kontos und derselben App können dadurch ungültig werden. Deshalb ruft während des Tests nur der Testdienst Aktivitäten ab. Nach dem Test verbindest du dein Konto auf der Hauptseite einmal neu. [Strava-Token-Erneuerung](https://developers.strava.com/docs/authentication/)
-
-## 3. Testdatenbank erstellen
-
-**Render → New → Postgres**:
-
-| Feld | Wert |
-| --- | --- |
-| Name | `november-october-test-db` |
-| Database | `challenge_october_test` |
-| Region | Dieselbe wie beim neuen Test-Web-Service, z.B. Oregon |
-| PostgreSQL-Version | `17` |
-
-Danach die **Internal Database URL** dieser neuen Datenbank kopieren. Nicht die URL der bestehenden produktiven `database` verwenden.
-
-## 4. Test-Web-Service erstellen
-
-**Render → New → Web Service → dasselbe Git-Repository auswählen**:
-
-| Feld | Wert |
-| --- | --- |
-| Name | `november-october-test` |
-| Branch | `main` |
-| Runtime | `Docker` |
-| Root Directory | leer |
-| Dockerfile Path | `./Dockerfile.test` |
-| Docker Build Context Directory, falls angezeigt | `.` |
-| Docker Command | leer |
-| Health Check Path | `/healthz` |
-| Region | Dieselbe wie die Testdatenbank |
-
-Unter **Environment** setzen:
-
-| Variable | Wert |
-| --- | --- |
-| `DATABASE_URL` | Internal Database URL von `november-october-test-db` |
-| `ADMIN_PASSWORD` | Selbst gewähltes Passwort für den Test-Admin |
-| `CHALLENGE_YEAR` | `2026` |
-| `CHALLENGE_TEST_MODE` | `1` |
-| `CHALLENGE_TEST_START_DATE` | `2026-10-01` |
-| `CHALLENGE_TEST_PERIOD_DAYS` | `8,7,7,7` |
-| `FRONTEND_URL` | `https://test.novjogcha.ch` |
-| `STRAVA_REDIRECT_URI` | `https://test.novjogcha.ch/auth/callback` |
-| `STRAVA_CLIENT_ID` | Dieselbe Client-ID wie beim produktiven Backend |
-| `STRAVA_CLIENT_SECRET` | Dasselbe Client Secret wie beim produktiven Backend |
-| `STRAVA_SYNC_ENABLED` | `1` |
-| `ENABLE_BACKGROUND_SYNC` | `1` |
-| `REQUIRE_POSTGRES` | `1` |
-| `COOKIE_SECURE` | `1` |
-| `FORWARDED_ALLOW_IPS` | `*` |
-| `LOAD_ENV_FILE` | `0` |
-| `ENABLE_DEBUG_ROUTES` | `0` |
-
-Keine produktiven Access-/Refresh-Tokens kopieren. Keine `VITE_API_BASE_URL` setzen: Das Test-Image baut relative API-Adressen ein. `frontend/.env.production` bleibt unverändert. Auf dem Testdienst keine Webhook-Subscription konfigurieren; der Test importiert nach Anmeldung, auf Knopfdruck und alle 30 Minuten. Die bestehende produktive Subscription bleibt bestehen, ihre Importarbeit ist während der Pause deaktiviert.
-
-## 5. Testadresse und bestehende Strava-App
-
-Beim **neuen Testdienst → Settings → Custom Domains → Add Custom Domain** `test.novjogcha.ch` hinzufügen.
-
-Beim DNS-Anbieter einen zusätzlichen Eintrag erstellen: **Typ CNAME**, **Name test**, **Ziel der von Render angezeigte Host des Testdienstes ohne https://**. Bestehende DNS-Einträge beibehalten. In Render **Verify** anklicken und auf das HTTPS-Zertifikat warten. [Render-Domains](https://render.com/docs/custom-domains)
-
-In [Strava → Settings → My API Application](https://www.strava.com/settings/api) die **Authorization Callback Domain** der bestehenden App auf **novjogcha.ch** setzen, ohne `https://` oder Pfad. Damit liegen die produktive Rücksprungadresse `api.novjogcha.ch/auth/callback` und die Testadresse `test.novjogcha.ch/auth/callback` innerhalb der registrierten Domain. Die Client-ID und das Secret bleiben gleich. [Strava-OAuth](https://developers.strava.com/docs/authentication/)
-
-## 6. Probelauf
-
-1. `https://test.novjogcha.ch/healthz` muss `status: ok` melden.
-2. `https://test.novjogcha.ch` öffnen: gelber Hinweis **Testumgebung**, Oktober-Daten und vorhandenes Logo.
-3. `/admin` mit dem **ADMIN_PASSWORD des Testdienstes** öffnen.
-4. Testkalender **vor der ersten Veröffentlichung** festlegen. Standard: 1.–8., 9.–15., 16.–22. und 23.–29. Oktober, Abschluss am 30. Oktober. Weiterhin 8/7/7/7 Ziele und standardmässig 15 km für das Finale.
-5. Für Zeitraum 1 beispielsweise `5,6,9,14,19,24,27,29` manuell eintragen. Entwurf speichern → öffentliche Seite prüfen → veröffentlichen. Die Auslosung erfolgt weiterhin im echten Leben. Eine erstmalige Veröffentlichung nach Periodenbeginn wertet vorhandene Läufe nachträglich.
-6. Mit deinem echten Strava-Konto anmelden und die Aktivitätsfreigabe erlauben. Bestehende Oktober-Läufe innerhalb des Kalenders werden importiert. Auf **Strava synchronisieren** drücken, warten und gegebenenfalls neu laden.
-7. Feldchen, Rangliste, Diagramm und Admin-Aktivitäten vergleichen. Wiederholter Import darf keine doppelten Punkte erzeugen. Am nächsten Tag nochmals prüfen, damit Token-Erneuerung und Angemeldetbleiben getestet werden.
-8. Gast-Läufergruppe mit Kartenpunkt erstellen, in einem anderen Browser teilnehmen, nach Neuladen bearbeiten/absagen. Dasselbe am Handy prüfen.
-
-### Wertung ohne zusätzliche echte Läufe prüfen
-
-Im Test-Admin einen **manuellen Testläufer** anlegen. Für diesen Teilnehmer unter Aktivitäten vergangene Tage erfassen:
-
-| Datum | Gelaufen | Erwartetes Feld |
-| --- | --- | --- |
-| 1.10.2026 | 35 km | 29 km |
-| 2.10.2026 | 30 km | 27 km |
-| 3.10.2026 | 7 km | 6 km |
-| 4.10.2026 | 4 km | keines |
-
-Ergebnis bei obiger Auslosung: **3 Distanzen, 62 gewertete km**. Nur die Website-Testdatenbank wird verändert; keine künstlichen Aktivitäten werden in Strava angelegt. Manuelle Korrekturen auf deinem echten Testprofil würden dessen Strava-Wertung für den jeweiligen Tag ersetzen; deshalb den separaten manuellen Teilnehmer verwenden.
-
-### Wochenwechsel und Finale sofort testen
-
-Vor Veröffentlichung im Testkalender beispielsweise **Beginn 1.10.2026, vier Perioden mit je 1 Tag** wählen: Perioden am 1., 2., 3. und 4. Oktober, Finale am 5. Oktober. Damit kannst du alle Abschnitte mit bereits vergangenen echten Läufen oder manuellen Testdaten prüfen. Weiterhin höchstens eine Wertung pro Tag; in verkürzten Perioden können entsprechend nicht alle Ziele erledigt werden.
-
-Nach Veröffentlichung ist der Kalender gesperrt. Für einen weiteren Durchgang mit anderem Kalender eine neue leere **Testdatenbank** anbinden. Render-Kalenderwerte dienen nur der Erstinitialisierung; ein Neustart überschreibt den gespeicherten Kalender nicht. Die Serveruhr und echte Strava-Datumswerte werden nicht verändert.
-
-## 7. Strava-Fehler prüfen
-
-**Testdienst → Logs → Strava sync failed** zeigt nun HTTP-Status und Endpunkt ohne Tokens oder Antwortkörper.
-
-| Status | Nächster Schritt |
-| --- | --- |
-| `401` | Strava-Verbindung auf der Testseite erneuern |
-| `403` | Aktivitätsfreigabe bei erneuter Verbindung erlauben; App-Zugriff prüfen |
-| `400` am `/oauth/token` | Client-ID/Secret und Verbindung prüfen; keine alten Tokens zwischen Diensten kopieren |
-| `429` | Strava-Anfragelimit abwarten |
-| `5xx` | Später erneut versuchen |
-
-Ein Datum vor November verursacht für sich keinen HTTP-Fehler. Der bisherige Logeintrag ohne Status reicht nicht zur Diagnose. Den echten Strava-Abruf können wir erst nach Anmeldung und Einrichtung im Render-Konto abschliessend bestätigen.
-
-## 8. Vor November zurückwechseln
-
-1. **Testdienst → Environment → STRAVA_SYNC_ENABLED=0**, speichern und deployen.
-2. **Produktives backend → Environment → STRAVA_SYNC_ENABLED=1** und **ENABLE_BACKGROUND_SYNC=1**, speichern und deployen.
-3. Produktiv **CHALLENGE_TEST_MODE=0** lassen; `CHALLENGE_TEST_START_DATE` und `CHALLENGE_TEST_PERIOD_DAYS` dort nicht setzen.
-4. Auf `https://www.novjogcha.ch` dein Konto einmal erneut mit Strava verbinden.
-5. Am produktiven API-Host `/challenge` prüfen: `test_mode=false`, `starts_on=2026-11-01`, `finale_date=2026-11-30`.
-6. Produktive Auslosungen selbst eintragen/veröffentlichen. Keine Testergebnisse übernehmen.
-
-Die Callback Domain `novjogcha.ch` kann bestehen bleiben. Die produktive Redirect-URI bleibt `https://api.novjogcha.ch/auth/callback`. Die zusätzlichen Testressourcen können nach Abschluss in Render entfernt werden.
-
-## Automatische Prüfung
-
-```powershell
-.venv\Scripts\python.exe -m unittest discover -s backend/tests -v
+```dotenv
+CHALLENGE_MONTH=10
 ```
 
-```powershell
-cd frontend
-npm test
-npm run build
+**CHALLENGE_YEAR bleibt 2026.** Speichern und das Backend deployen. Die Website danach neu laden. `https://api.novjogcha.ch/challenge` zeigt `month: 10` und `starts_on: 2026-10-01`.
+
+Auf der normalen Website erscheint **Oktober-Probelauf**. Der Kalender lautet 1.–8., 9.–15., 16.–22. und 23.–29. Oktober; der Abschluss ist am 30. Oktober. Die Verteilung bleibt 8/7/7/7 Ziele.
+
+1. Auf der normalen Website `/admin` öffnen, mit deinem bisherigen Admin-Passwort anmelden und die Oktober-Auslosung manuell eintragen/veröffentlichen. Eine erstmalige Veröffentlichung ist auch nach Beginn des Zeitraums möglich.
+2. Mit Strava anmelden oder bei bestehender Anmeldung **Strava synchronisieren** drücken. Deine bisherigen Oktober-Läufe werden importiert; es zählt weiterhin der längste einzelne Lauf pro Tag.
+3. Feldchen, Rangliste, Diagramm und Admin-Aktivitäten vergleichen. Nach erneutem Import dürfen keine doppelten Punkte entstehen.
+4. Läufergruppen und Karte auf Computer und Handy ausprobieren.
+
+Für einen gezielten Wertungstest kannst du im Admin einen manuellen Teilnehmer anlegen und vergangene Oktober-Läufe eintragen. Dabei werden keine Aktivitäten in Strava angelegt. Manuelle Teilnehmer sind in beiden Monaten sichtbar, ihre Kilometer werden nur im jeweiligen Monat gewertet. Nicht mehr benötigte manuelle Testteilnehmer kannst du später im Admin löschen.
+
+## Auf November zurückwechseln
+
+Beim **selben backend → Environment** ändern:
+
+```dotenv
+CHALLENGE_MONTH=11
 ```
 
-Tests verwenden temporäre Datenbanken und simulierte Strava-Antworten. Die Browserprüfung testet Oktober-Admin, Wertung, Feldchen, Kalender-Sperre, Diagramm und mobile Darstellung gegen ein echtes lokales Backend. Produktionsdaten und echte Strava-Aktivitäten werden dabei nicht verändert.
+Speichern, Backend deployen und Website neu laden. Jetzt gelten wieder 1.–30. November. Bereits vorbereitete November-Auslosungen und November-Ergebnisse sind wieder sichtbar; Oktober-Punkte werden nicht übernommen. Der Strava-Login bleibt bestehen. Wenn du später nochmals auf `10` wechselst, sind deine Oktober-Auslosungen und Ergebnisse weiterhin vorhanden.
+
+## Alte Testkonfiguration entfernen
+
+Falls du sie aus der vorherigen Anleitung bereits gesetzt hast, beim bestehenden Backend diese alten Variablen entfernen: `CHALLENGE_TEST_MODE`, `CHALLENGE_TEST_START_DATE`, `CHALLENGE_TEST_PERIOD_DAYS`, `STRAVA_SYNC_ENABLED` und `SERVE_FRONTEND_DIRECTORY`. Sie werden nicht mehr verwendet. Für automatische Aktualisierung `ENABLE_BACKGROUND_SYNC=1` lassen.
+
+Frontend-Adresse, `DATABASE_URL`, `VITE_API_BASE_URL`, Strava-Client-ID, Secret und die produktive Redirect-URI bleiben unverändert. Keine weitere Domain oder Strava-App einrichten. Falls bereits zusätzliche Testdienste angelegt wurden, werden sie für diesen Ablauf nicht mehr benötigt.
+
+Ein weiterhin auftretender Strava-HTTP-Fehler ist separat zu prüfen: **backend → Logs → Strava sync failed**. Der Logeintrag nennt Status und Endpunkt, ohne Tokens auszugeben. Die Kalenderumschaltung behebt fehlende Strava-Berechtigungen oder ungültige Zugangsdaten nicht.

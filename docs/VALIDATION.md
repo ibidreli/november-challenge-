@@ -1,18 +1,18 @@
-# Lokale Prüfung am 7. Oktober 2026
+# Lokale Prüfung am 8. Oktober 2026
 
-## Ergänzung: Oktober-Probelauf
+## Oktober direkt auf der bestehenden Website
 
-- **37 Backend-/API-Tests mit PostgreSQL 17:** erfolgreich, einschliesslich Oktober-Importgrenzen in Schweizer Zeit, längstem Tageslauf, verkürzten Testperioden, Wochenwechseln, automatischem Finale und unveränderter November-Wertung.
-- **8 Browserabläufe:** erfolgreich, zusätzlich Oktober-Admin mit konfigurierbarem Kalender, Sperre nach Veröffentlichung, persönlichem Fortschritt, Oktober-Diagramm und Handy-/Desktop-Darstellung.
-- **Test-Dockerfile mit Oberfläche und API auf einem Host:** gebaut und mit PostgreSQL auf `PORT=10000` gestartet. `/`, `/admin`, Logo-/CSS-/JS-Assets und `/healthz` liefern HTTP 200. Ein 35-km-Testlauf wird als 29 km im Diagramm gewertet; Kalender und Ergebnis bleiben nach Containerwechsel erhalten.
-- **Getrennte Datenbanken:** Start im Testmodus gegen eine bestehende produktive Edition wird abgelehnt; umgekehrt ebenso. Migration von einer bereits vorhandenen Wochen-Edition erhält Jahr, Finale und Ergebnisse.
-- **Pause für die bestehende Strava-App:** Hintergrundimport, manuelle Synchronisation und Webhook-Worker sind bei `STRAVA_SYNC_ENABLED=0` pausiert. Der Container liefert bei manueller Synchronisation HTTP 409.
-- **Fehlerdiagnose:** HTTP-Status und Endpunkt werden protokolliert; Query-Strings, Tokens und Antwortkörper werden nicht geloggt. Fehlgeschlagene Importe erhalten bestehende Punkte.
-- **Build und Sichtprüfung:** Produktionsbuild erfolgreich; Oktober-Screenshots auf Handy und Desktop geprüft. Keine horizontale Überbreite in den getesteten Ansichten. `.env` und E2E-Testserver fehlen im Test-Image.
+- **36 Backend-/API-Tests mit PostgreSQL 17:** erfolgreich, einschliesslich Oktober-Importgrenzen in Schweizer Zeit, längstem Tageslauf, automatischem Finale und Rückwechsel zur unveränderten November-Wertung.
+- **SQLite:** dieselbe Suite erfolgreich; zwei PostgreSQL-spezifische Tests werden übersprungen.
+- **Datenbankmigration:** mit vorhandenen SQLite- und PostgreSQL-Datenbanken geprüft. Auslosungen, Claims, Aktivitäten, alte Punkte, Strava-Tokens und Website-Sitzungen bleiben erhalten. Wiederholte Migration und Monatswechsel sind geprüft.
+- **Bestehende Anmeldung:** Oktober und November verwenden dieselben Benutzer und Sitzungen. Auslosungen und Wertungen sind innerhalb derselben Datenbank nach Jahr und Monat getrennt.
+- **7 Playwright-Browserabläufe:** erfolgreich, inklusive Desktop, Handy und echter lokaler Frontend-/Backend-Integration.
+- **Produktionsbuild:** `npm run build` erfolgreich.
+- **Aufräumen:** zusätzlicher Test-Dockerfile, eigener Oktober-E2E-Server, Testkalender-Formular und Strava-Pausenschalter entfernt. Für den Probelauf genügt `CHALLENGE_MONTH=10` auf dem vorhandenen Backend.
 
-Render-/DNS-Einrichtung und echte Strava-Autorisierung stehen noch aus; Anleitung mit bestehender App: [OCTOBER_TEST.md](../OCTOBER_TEST.md). Die folgenden Punkte dokumentieren die vorherige Prüfung der November-Implementierung.
+Die echte Strava-Verbindung und die Migration der Render-Datenbank wurden lokal nicht ausgeführt. Die Umstellung auf der bestehenden Website beschreibt [OCTOBER_TEST.md](../OCTOBER_TEST.md).
 
-## Vorherige Prüfung
+## Vorherige Prüfung am 7. Oktober 2026
 
 - **28 Backend-/API-Tests mit PostgreSQL 17:** erfolgreich, inklusive paralleler Wertungsberechnung und acht gleichzeitiger identischer Gruppen-Teilnahmen ohne Duplikat.
 - **SQLite:** dieselbe Suite erfolgreich; der eine PostgreSQL-spezifische Sperrtest wird übersprungen.

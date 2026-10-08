@@ -4,6 +4,7 @@ const config = {
   year: 2026,
   timezone: "Europe/Zurich",
   finale_km: 15,
+  month: 11,
   test_mode: false,
   starts_on: "2026-11-01",
   finale_date: "2026-11-30",

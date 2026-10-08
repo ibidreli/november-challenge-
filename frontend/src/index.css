@@ -1026,15 +1026,6 @@ th {
 .test-banner span {
   display: block;
 }
-.test-calendar {
-  padding: 20px;
-  margin: 20px 0;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-}
-.test-calendar > .btn {
-  margin-top: 18px;
-}
 .skip-link {
   position: fixed;
   top: 12px;

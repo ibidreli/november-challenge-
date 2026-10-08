@@ -11,7 +11,7 @@ from models.claim import Claim
 from models.challenge import ChallengeClaim
 from models.session import AuthSession
 from models.community import CommunityRun
-from services.challenge import configuration, save_draw, set_finale, participant, edition, rebuild_user, lock_user, set_test_calendar
+from services.challenge import configuration, save_draw, set_finale, participant, edition, rebuild_user, lock_user
 from services.schedule import bounds
 from services.sessions import verify_admin_token, issue_session
 from services.limits import limit
@@ -61,14 +61,6 @@ class Finale(BaseModel):
 @router.put("/challenge/finale", dependencies=[Depends(verify_admin_token)])
 def finale(body: Finale, db: Session = Depends(get_db)):
     return set_finale(db, body.km)
-
-class TestCalendar(BaseModel):
-    starts_on: date
-    period_days: list[StrictInt] = Field(min_length=4, max_length=4)
-
-@router.put("/challenge/test-calendar", dependencies=[Depends(verify_admin_token)])
-def test_calendar(body: TestCalendar, db: Session = Depends(get_db)):
-    return set_test_calendar(db, body.starts_on, body.period_days)
 
 @router.get("/users", dependencies=[Depends(verify_admin_token)])
 def users(db: Session = Depends(get_db)):
@@ -188,8 +180,6 @@ def restore_activity(activity_id: int, db: Session = Depends(get_db)):
 
 @router.post("/sync", status_code=202, dependencies=[Depends(verify_admin_token)])
 def sync(tasks: BackgroundTasks):
-    if os.getenv("STRAVA_SYNC_ENABLED", "1") != "1":
-        raise HTTPException(409, "Die Strava-Synchronisierung ist auf dieser Seite vorübergehend pausiert.")
     from services.strava import sync_all_background
     tasks.add_task(sync_all_background)
     return {"queued": True}
