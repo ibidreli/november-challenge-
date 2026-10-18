@@ -53,25 +53,34 @@ let runs = [
   },
 ];
 function participant(p, rank) {
+  const targets = config.periods
+    .filter((period) => period.published)
+    .flatMap((period) => period.distances);
+  const done = p.done.filter(
+    (km) => targets.includes(km) || km === config.finale_km,
+  );
   return {
     id: p.id,
     name: p.name,
     rank,
-    total_score: p.done.reduce((a, b) => a + b, 0),
-    completed_count: p.done.length,
+    total_score: done.reduce((a, b) => a + b, 0),
+    completed_count: done.length,
     cells: Array.from({ length: 30 }, (_, i) => ({
       km: i + 1,
-      status: p.done.includes(i + 1)
+      status: done.includes(i + 1)
         ? "completed"
-        : draw.includes(i + 1)
+        : targets.includes(i + 1)
           ? "open"
-          : i === 14
+          : i + 1 === config.finale_km
             ? "scheduled"
             : "upcoming",
-      period: draw.includes(i + 1) ? 1 : null,
-      finale: i === 14,
-      finale_date: i === 14 ? config.finale_date : null,
-      completed_on: p.done.includes(i + 1) ? "2026-11-03" : null,
+      period:
+        config.periods.find(
+          (period) => period.published && period.distances.includes(i + 1),
+        )?.number || null,
+      finale: i + 1 === config.finale_km,
+      finale_date: i + 1 === config.finale_km ? config.finale_date : null,
+      completed_on: done.includes(i + 1) ? "2026-11-03" : null,
     })),
     strava_connected: true,
     last_synced_at: new Date().toISOString(),
@@ -121,9 +130,10 @@ export async function previewRequest(path, method, body) {
   }
   if (path.startsWith("/admin/challenge/periods/")) {
     const p = config.periods[Number(path.split("/")[4]) - 1];
-    p.draft_distances = body.distances;
-    p.published = path.endsWith("publish");
+    p.draft_distances = method === "DELETE" ? [] : body.distances;
+    p.published = method !== "DELETE" && path.endsWith("publish");
     p.distances = p.published ? body.distances : [];
+    p.editable = !p.published || config.server_date < p.starts_on;
     return structuredClone(config);
   }
   if (path === "/community" && method === "GET")

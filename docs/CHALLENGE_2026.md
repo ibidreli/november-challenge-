@@ -4,6 +4,8 @@ Vier Zeiträume: **1.–8., 9.–15., 16.–22. und 23.–29. November** mit **8
 
 Jede ganze Distanz von 1–30 km wird genau einmal verteilt. Eine im Admin einstellbare Distanz, standardmässig **15 km**, bleibt für den **30.11.** reserviert. Unveröffentlichte Entwürfe sind öffentlich nicht abrufbar.
 
+Im Admin kann eine Auslosung mit **Auslosung zurücksetzen** auch nach Beginn der Woche gelöscht werden. Dabei werden die Distanzen freigegeben und die Wertungen dieser Woche entfernt. Die Läufe bleiben gespeichert und werden nach erneuter Veröffentlichung mit den neuen Distanzen gewertet. Andere Wochen, der Abschlusslauf und andere Editionen bleiben erhalten.
+
 ## Wertung
 
 - Lauftag und Wochenzuordnung gelten in `Europe/Zurich`.

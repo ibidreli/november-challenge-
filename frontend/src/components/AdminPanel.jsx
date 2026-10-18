@@ -3,7 +3,7 @@ import { api, errorText, isPreview } from "../api";
 import { localInput, runDate, challengeDate } from "../time";
 import TestNotice from "./TestNotice";
 
-function DrawEditor({ period, onSave, busy, finale }) {
+function DrawEditor({ period, onSave, onReset, busy, finale }) {
   const [value, setValue] = useState(period.draft_distances.join(", "));
   useEffect(
     () => setValue(period.draft_distances.join(", ")),
@@ -66,6 +66,22 @@ function DrawEditor({ period, onSave, busy, finale }) {
         </div>
       ) : (
         <p className="muted">Seit Beginn des Zeitraums gesperrt.</p>
+      )}
+      {(period.published || period.draft_distances.length > 0) && (
+        <button
+          className="text-button danger"
+          disabled={busy}
+          onClick={() => {
+            if (
+              window.confirm(
+                `Auslosung für Woche ${period.number} zurücksetzen? Die Distanzen werden freigegeben und die Wertungen dieser Woche entfernt. Gespeicherte Läufe bleiben erhalten und werden nach einer erneuten Veröffentlichung neu gewertet.`,
+              )
+            )
+              onReset(period.number);
+          }}
+        >
+          Auslosung zurücksetzen
+        </button>
       )}
     </article>
   );
@@ -225,7 +241,9 @@ export default function AdminPanel() {
               <p>
                 Trage die Ergebnisse eurer Auslosung ein. Entwürfe sieht nur der
                 Admin; mit «Veröffentlichen» erscheinen die Distanzen für alle.
-                Nach Beginn einer veröffentlichten Woche ist diese gesperrt.
+                Nach Beginn einer veröffentlichten Woche ist diese gesperrt. Mit
+                «Auslosung zurücksetzen» kannst du die Distanzen auch danach neu
+                eintragen und veröffentlichen.
               </p>
               <form
                 className="finale-form"
@@ -275,6 +293,14 @@ export default function AdminPanel() {
                     period={p}
                     finale={data.config.finale_km}
                     busy={busy}
+                    onReset={(n) =>
+                      mutate(
+                        `/admin/challenge/periods/${n}`,
+                        "DELETE",
+                        undefined,
+                        "Auslosung zurückgesetzt. Distanzen sind wieder frei; gespeicherte Läufe bleiben erhalten.",
+                      )
+                    }
                     onSave={(n, distances, publish) =>
                       mutate(
                         `/admin/challenge/periods/${n}${publish ? "/publish" : ""}`,

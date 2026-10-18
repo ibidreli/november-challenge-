@@ -211,6 +211,26 @@ def save_draw(db, number, distances, publish=False):
     db.commit()
     return configuration(db, admin=True)
 
+def reset_draw(db, number):
+    e = edition(db, lock=True)
+    p = next((p for p in periods(db, e) if p.number == number), None)
+    if not p:
+        raise HTTPException(404, "Zeitraum nicht gefunden.")
+    targets = db.scalars(select(DistanceTarget).where(DistanceTarget.period_id == p.id)).all()
+    # Remove dependent results before the targets (foreign keys have no cascade).
+    # Raw activities are retained so a replacement draw can score them again.
+    if targets:
+        db.query(ChallengeClaim).filter(ChallengeClaim.edition_id == e.id,
+            ChallengeClaim.target_id.in_([t.id for t in targets])).delete(synchronize_session="fetch")
+        for target in targets:
+            db.delete(target)
+    p.draft_distances, p.published_at = [], None
+    db.flush()
+    rebuild_all(db, e)
+    db.commit()
+    return configuration(db, admin=True)
+
+
 def set_finale(db, km):
     e = edition(db, lock=True)
     if km == e.finale_km:

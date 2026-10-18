@@ -400,6 +400,81 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.client.put("/admin/challenge/periods/2", headers=self.admin, json={"distances": second}).status_code, 200)
         self.assertFalse(self.client.get("/challenge").json()["periods"][1]["published"])
 
+    def test_reset_draw_removes_results_but_retains_runs_and_other_weeks(self):
+        self.publish()
+        self.publish(2, [1, 2, 3, 4, 7, 8, 10])
+        a, b = self.add_user(strava_id=99), self.add_user("Second runner")
+        self.add_run(a, 35, 1, sid=101)
+        self.add_run(a, 7, 2, manual=True)
+        self.add_run(b, 30, 1)
+        self.add_run(a, 12, 9)
+        self.add_run(a, 15, 30)
+        self.assertEqual(self.result(a)["total_score"], 60)
+        self.assertEqual(self.result(b)["total_score"], 29)
+        before = self.client.get("/admin/challenge", headers=self.admin).json()
+        with SessionLocal() as db:
+            original_runs = [(run.id, run.strava_id, run.date, run.distance_km, run.is_manual)
+                             for run in db.query(Activity).order_by(Activity.id).all()]
+        response = self.client.delete("/admin/challenge/periods/1", headers=self.admin)
+        self.assertEqual(response.status_code, 200, response.text)
+        cleared = response.json()["periods"][0]
+        self.assertEqual(cleared["draft_distances"], [])
+        self.assertEqual(cleared["distances"], [])
+        self.assertFalse(cleared["published"])
+        self.assertTrue(cleared["editable"])
+        self.assertEqual(response.json()["periods"][1:], before["periods"][1:])
+        self.assertEqual(self.result(a)["total_score"], 25)  # week 2 + finale
+        self.assertEqual(self.result(b)["total_score"], 0)
+        self.assertEqual(self.client.get("/challenge/statistics").json()["total_km"], 25)
+        with SessionLocal() as db:
+            self.assertEqual([(run.id, run.strava_id, run.date, run.distance_km, run.is_manual)
+                for run in db.query(Activity).order_by(Activity.id).all()], original_runs)
+            self.assertEqual(db.get(User, a).refresh_token, "refresh-secret")
+        self.assertEqual(self.client.delete("/admin/challenge/periods/1", headers=self.admin).status_code, 200)
+        self.publish(distances=[5, 6, 9, 14, 19, 24, 27, 28])
+        self.assertEqual(self.result(a)["total_score"], 59)
+        self.assertEqual(self.result(b)["total_score"], 28)
+        self.assertEqual(self.client.get("/challenge/statistics").json()["total_km"], 87)
+
+    def test_reset_draft_frees_distances_and_requires_admin(self):
+        self.assertEqual(self.client.put("/admin/challenge/periods/1", headers=self.admin,
+            json={"distances": DRAW}).status_code, 200)
+        self.assertEqual(self.client.delete("/admin/challenge/periods/1").status_code, 401)
+        self.authorize(self.add_user())
+        self.assertEqual(self.client.delete("/admin/challenge/periods/1").status_code, 401)
+        self.assertEqual(self.client.delete("/admin/challenge/periods/5", headers=self.admin).status_code, 404)
+        response = self.client.delete("/admin/challenge/periods/1", headers=self.admin)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["periods"][0]["draft_distances"], [])
+        self.assertEqual(response.json()["finale_km"], 15)
+        self.publish(2, [5, 6, 9, 14, 19, 24, 27])
+
+    def test_reset_draw_is_scoped_to_active_edition(self):
+        self.publish()
+        uid = self.add_user()
+        self.add_run(uid, 35, 1)
+        self.october()
+        self.publish()
+        with SessionLocal() as db:
+            db.add(Activity(user_id=uid, date=date(2026, 10, 1), distance_km=30, status="pending"))
+            db.flush(); challenge.rebuild_user(db, uid); db.commit()
+        self.assertEqual(self.result(uid)["total_score"], 29)
+        self.assertEqual(self.client.delete("/admin/challenge/periods/1", headers=self.admin).status_code, 200)
+        self.assertEqual(self.result(uid)["total_score"], 0)
+        with patch.dict(os.environ, CHALLENGE_MONTH="11"):
+            self.assertEqual(self.result(uid)["total_score"], 29)
+            self.assertTrue(self.client.get("/challenge").json()["periods"][0]["published"])
+
+    def test_reset_draw_rolls_back_if_recalculation_fails(self):
+        self.publish()
+        uid = self.add_user()
+        self.add_run(uid, 35, 1)
+        with patch("services.challenge.rebuild_all", side_effect=RuntimeError("Test rebuild failure")):
+            with self.assertRaises(RuntimeError):
+                self.client.delete("/admin/challenge/periods/1", headers=self.admin)
+        self.assertEqual(self.result(uid)["total_score"], 29)
+        self.assertEqual(self.client.get("/challenge").json()["periods"][0]["distances"], sorted(DRAW))
+
     def test_no_week_carryover_and_finale_only_nov30(self):
         self.publish(); self.publish(2, [1, 2, 3, 4, 7, 8, 10]); uid = self.add_user()
         self.add_run(uid, 50, 8); self.add_run(uid, 50, 9); self.add_run(uid, 15, 29)

@@ -26,6 +26,7 @@ Interaktive Schemas und Beispiele: Backend `/docs`. Öffentliche API liefert nur
 | PUT | `/admin/challenge/finale` | Body `{km}` |
 | PUT | `/admin/challenge/periods/{1..4}` | Entwurf, Body `{distances:[...]}` |
 | POST | `/admin/challenge/periods/{1..4}/publish` | Gleicher Body; veröffentlichen und neu werten |
+| DELETE | `/admin/challenge/periods/{1..4}` | Admin: Auslosung samt Wertungen zurücksetzen, Distanzen freigeben; gespeicherte Läufe bleiben erhalten |
 | GET / POST | `/admin/users` | Teilnehmer lesen / mit `{name}` anlegen |
 | PUT / DELETE | `/admin/users/{id}` | Name mit `{name}` ändern / Teilnehmer samt Daten löschen |
 | GET / POST | `/admin/activities` | Aktivitäten des aktiven Kalenders / manuelle Tageskorrektur |

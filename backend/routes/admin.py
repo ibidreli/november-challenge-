@@ -11,7 +11,7 @@ from models.claim import Claim
 from models.challenge import ChallengeClaim
 from models.session import AuthSession
 from models.community import CommunityRun
-from services.challenge import configuration, save_draw, set_finale, participant, edition, rebuild_user, lock_user
+from services.challenge import configuration, save_draw, reset_draw, set_finale, participant, edition, rebuild_user, lock_user
 from services.schedule import bounds
 from services.sessions import verify_admin_token, issue_session
 from services.limits import limit
@@ -54,6 +54,10 @@ def draft(number: int, body: Draw, db: Session = Depends(get_db)):
 @router.post("/challenge/periods/{number}/publish", dependencies=[Depends(verify_admin_token)])
 def publish(number: int, body: Draw, db: Session = Depends(get_db)):
     return save_draw(db, number, body.distances, publish=True)
+
+@router.delete("/challenge/periods/{number}", dependencies=[Depends(verify_admin_token)])
+def reset_period(number: int, db: Session = Depends(get_db)):
+    return reset_draw(db, number)
 
 class Finale(BaseModel):
     km: StrictInt = Field(ge=1, le=30)

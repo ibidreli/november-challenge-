@@ -108,6 +108,50 @@ test("guest creates a mapped run, joins another and can leave", async ({
   ).toBeTruthy();
 });
 
+test("admin resets a locked draw and enters replacement distances", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/admin");
+  await page.getByLabel("Admin-Passwort").fill("preview");
+  await page.getByRole("button", { name: "Anmelden", exact: true }).click();
+  const week = page
+    .locator(".draw-card")
+    .filter({ has: page.getByRole("heading", { name: "Woche 1" }) });
+  const distances = week.getByLabel("Ausgeloste Distanzen in km");
+  await expect(distances).toBeDisabled();
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await week.getByRole("button", { name: "Auslosung zurücksetzen" }).click();
+  await expect(distances).toBeDisabled();
+  page.once("dialog", (dialog) => dialog.accept());
+  await week.getByRole("button", { name: "Auslosung zurücksetzen" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "Auslosung zurückgesetzt",
+  );
+  await expect(distances).toBeEnabled();
+  await expect(distances).toHaveValue("");
+  await expect(page.getByText("Noch im Topf: 29 Distanzen")).toBeVisible();
+  await distances.fill("5,6,9,14,19,24,27,28");
+  await week.getByRole("button", { name: "Entwurf speichern" }).click();
+  await expect(page.getByRole("status")).toContainText("Entwurf gespeichert");
+  await expect(page.getByText("Noch im Topf: 21 Distanzen")).toBeVisible();
+  await week
+    .getByRole("button", { name: "Veröffentlichen", exact: true })
+    .click();
+  await expect(page.getByRole("status")).toContainText(
+    "Auslosung veröffentlicht",
+  );
+  await expect(distances).toBeDisabled();
+  await page.screenshot({
+    path: `../output/verification/admin-draw-${testInfo.project.name}.png`,
+    fullPage: true,
+  });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBeTruthy();
+});
+
 test("Swiss start times are independent of browser timezone", async ({
   page,
 }) => {

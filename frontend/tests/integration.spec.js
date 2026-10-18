@@ -43,8 +43,37 @@ test("real API: cookie login, manual correction, draw publication and guest pers
   await page.getByLabel("Tatsächlich gelaufene km").fill("7");
   await page.getByRole("button", { name: "Korrektur speichern" }).click();
   await expect(page.getByRole("status")).toContainText("Wertung aktualisiert");
+  await page.getByRole("button", { name: "Challenge", exact: true }).click();
+  const week1 = page
+    .locator(".draw-card")
+    .filter({ has: page.getByRole("heading", { name: "Woche 1" }) });
+  const distances = week1.getByLabel("Ausgeloste Distanzen in km");
+  await expect(distances).toBeDisabled();
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await week1.getByRole("button", { name: "Auslosung zurücksetzen" }).click();
+  await expect(distances).toBeDisabled();
+  page.once("dialog", (dialog) => dialog.accept());
+  await week1.getByRole("button", { name: "Auslosung zurücksetzen" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "Auslosung zurückgesetzt",
+  );
+  await expect(distances).toBeEnabled();
+  await expect(distances).toHaveValue("");
+  const cleared = await page.request.get("/users/");
+  expect(
+    (await cleared.json()).find((user) => user.name === "Sofia Integration")
+      .total_score,
+  ).toBe(0);
+  await distances.fill("5,6,9,14,19,24,27,28");
+  await week1
+    .getByRole("button", { name: "Veröffentlichen", exact: true })
+    .click();
+  await expect(page.getByRole("status")).toContainText(
+    "Auslosung veröffentlicht",
+  );
+  await expect(distances).toBeDisabled();
   await page.goto("/");
-  await expect(page.locator(".personal-panel")).toContainText("40 km"); // manual 7->6, day2 30->29, day3 7->5
+  await expect(page.locator(".personal-panel")).toContainText("39 km"); // existing runs re-score: manual 7->6, day2 30->28, day3 7->5
   await page.getByRole("button", { name: "Abmelden", exact: true }).click();
   await expect(
     page.getByRole("link", { name: /Mit Strava anmelden/ }),

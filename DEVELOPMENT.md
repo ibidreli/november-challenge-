@@ -67,6 +67,8 @@ npm run build:ui
 
 Mit `dev:ui` entwickeln: Vite aktualisiert die Ansicht automatisch. Bei einer Wertungsänderung die API-Tests ausführen; bei Formularen oder Login zusätzlich `npm test`. Für Auslosungen mit echten lokalen Daten: `/admin` → Challenge → Entwurf speichern → öffentliche Übersicht prüfen → Veröffentlichen. Auslosungen vor dem 1.11. können vorbereitet werden; gewertet wird erst ab dem tatsächlichen Lauftag.
 
+Auslosung korrigieren: `/admin` → Challenge → bei der betroffenen Woche **Auslosung zurücksetzen** → bestätigen. Das funktioniert auch bei bereits begonnenen oder vergangenen Wochen. Die alten Distanzen werden freigegeben und ihre Wertungen entfernt. Gespeicherte Strava-Läufe und manuelle Korrekturen bleiben erhalten; andere Wochen und die Abschlussdistanz bleiben bestehen. Danach neue Distanzen eintragen und **Veröffentlichen**. Die vorhandenen Läufe werden automatisch neu gewertet, ohne erneuten Strava-Import. Das Zurücksetzen betrifft nur die aktuell eingestellte Edition (Jahr/Monat).
+
 ## Laufgruppen teilen
 
 Jede Gruppe hat einen kleinen Teilen-Button. Der Dialog zeigt ein schlichtes PNG mit Logo, Distanz, Pace, Datum, Uhrzeit, Ersteller und Treffpunkt-Karte. **Bild teilen** öffnet auf unterstützten Geräten den Teilen-Dialog des Betriebssystems. Andernfalls lädt derselbe Button das Bild herunter.
