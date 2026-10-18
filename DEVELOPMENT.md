@@ -18,11 +18,13 @@ Die beiden Startbefehle in eigenen Terminals ausführen. Für lokale Entwicklung
 | --- | --- |
 | Farben, Abstände, mobile Darstellung | `frontend/src/index.css` |
 | Logo, auffällige Anmeldung, angemeldeter Name | `frontend/src/App.jsx` |
+| Über uns, OK-Texte und bisherige Ausgaben | `frontend/src/components/About.jsx` |
+| Gestaltung der Über-uns-Seite | `frontend/src/components/About.css` |
 | Persönliche Übersicht und Wochenhinweis | `frontend/src/components/Dashboard.jsx` |
 | Nummerierte Feldchen | `frontend/src/components/ChallengeProgress.jsx` |
 | Kompakte Rangliste | `frontend/src/components/Leaderboard.jsx` |
 | Gemeinsame Kilometerkurve | `frontend/src/components/ChallengeStats.jsx` |
-| Läufergruppen und Formular | `frontend/src/components/Groups.jsx` |
+| Laufgruppen und Formular | `frontend/src/components/Groups.jsx` |
 | Interaktive Karte | `frontend/src/components/StartMap.jsx` |
 | Admin-Oberfläche | `frontend/src/components/AdminPanel.jsx` |
 | Beispieldaten | `frontend/src/previewData.js` |

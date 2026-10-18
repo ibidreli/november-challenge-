@@ -222,7 +222,7 @@ export default function AdminPanel() {
               ["challenge", "Challenge"],
               ["users", "Teilnehmer"],
               ["activities", "Aktivitäten"],
-              ["groups", "Läufergruppen"],
+              ["groups", "Laufgruppen"],
             ].map(([key, title]) => (
               <button
                 key={key}
@@ -562,7 +562,7 @@ export default function AdminPanel() {
             </>
           ) : (
             <>
-              <h2>Läufergruppen moderieren</h2>
+              <h2>Laufgruppen moderieren</h2>
               <div className="admin-list">
                 {data.groups.map((r) => (
                   <article key={r.id}>

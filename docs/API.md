@@ -33,7 +33,7 @@ Interaktive Schemas und Beispiele: Backend `/docs`. Öffentliche API liefert nur
 | PUT / DELETE | `/admin/activities/{id}` | Manuelle Aktivität ändern / Aktivität ausschliessen |
 | POST | `/admin/activities/{id}/restore` | Admin-Ausschluss rückgängig machen |
 | POST | `/admin/sync` | Vollständigen Strava-Import im Hintergrund starten (202) |
-| GET | `/admin/community` | Aktive Läufergruppen moderieren |
+| GET | `/admin/community` | Aktive Laufgruppen moderieren |
 | DELETE | `/admin/community/{id}` | Als Admin absagen |
 
 Alle Admin-Pfade ausser `/admin/login` benötigen `X-Admin-Token`. Spieler verwenden den `HttpOnly`-Cookie `nc_session`, Gäste für Eigentum/Teilnahme `nc_guest`. Keine Strava-Bearer-Tokens oder Login-Geheimnisse in Query-Parametern.

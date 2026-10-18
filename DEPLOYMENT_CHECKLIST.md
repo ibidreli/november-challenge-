@@ -39,7 +39,7 @@ Docker-Konfiguration: Bei Repository-Root als Build Context den Root-`Dockerfile
 
 `FORWARDED_ALLOW_IPS=*` ist für den Betrieb hinter Render gedacht. Lokal bleibt der Uvicorn-Standard `127.0.0.1`; beim direkten öffentlichen Betrieb nur tatsächlich vertrauenswürdige Proxy-Adressen erlauben. Die korrekte Client-IP verhindert, dass die Begrenzung für Gast-Anfragen alle Teilnehmer gemeinsam trifft. [FastAPI hinter einem Proxy](https://fastapi.tiangolo.com/advanced/behind-a-proxy/).
 
-Vor dem ersten produktiven Update einen aktuellen Datenbank-Backup/Snapshot erstellen. Beim Start läuft eine additive, versionierte Migration innerhalb einer Transaktion; PostgreSQL-Sperren schützen parallele Starts. Neue Tabellen speichern Wochenwertung, Sitzungen und Läufergruppen. Historische `users.slots`, `users.total_score`, Aktivitäten und `claims` bleiben erhalten. Manuell falsch gesetzte alte Strava-IDs müssen numerisch sein oder vorab korrigiert werden. Die Anwendung erzeugt keine neue verwaltete Datenbank.
+Vor dem ersten produktiven Update einen aktuellen Datenbank-Backup/Snapshot erstellen. Beim Start läuft eine additive, versionierte Migration innerhalb einer Transaktion; PostgreSQL-Sperren schützen parallele Starts. Neue Tabellen speichern Wochenwertung, Sitzungen und Laufgruppen. Historische `users.slots`, `users.total_score`, Aktivitäten und `claims` bleiben erhalten. Manuell falsch gesetzte alte Strava-IDs müssen numerisch sein oder vorab korrigiert werden. Die Anwendung erzeugt keine neue verwaltete Datenbank.
 
 ## 3. Strava-App konfigurieren
 
@@ -59,7 +59,7 @@ Im bestehenden Static-Site-Service:
 
 Die eingecheckte `.env.production` enthält ebenfalls diese API-Adresse. Eine eventuell bisher in Render gesetzte alte API-Adresse **überschreiben**, da Render-Variablen Vorrang haben. Nach Änderung neu bauen; Vite-Werte werden beim Build eingebettet.
 
-Unter **Redirects/Rewrites** eine **Rewrite**-Regel setzen: Source `/*`, Destination `/index.html`, Action `Rewrite`. Dadurch funktioniert der direkte Aufruf von `/admin`. Das vorhandene `_redirects` allein konfiguriert Render nicht. [Render Static Sites](https://render.com/docs/static-sites).
+Unter **Redirects/Rewrites** eine **Rewrite**-Regel setzen: Source `/*`, Destination `/index.html`, Action `Rewrite`. Dadurch funktionieren die direkten Aufrufe von `/admin` und `/about` (Über uns). Das vorhandene `_redirects` allein konfiguriert Render nicht. [Render Static Sites](https://render.com/docs/static-sites).
 
 Optional anderer Kartenanbieter: `VITE_MAP_TILE_URL` mit `{z}/{x}/{y}` und passende `VITE_MAP_ATTRIBUTION`. Der Standard zeigt OpenStreetMap mit Quellenangabe. Für die Karte ist kein Strava-Login nötig.
 

@@ -12,13 +12,59 @@ import { api, isPreview, loginUrl, errorText } from "./api";
 import { previewLogin } from "./previewData";
 import logo from "../logo/Logo.png";
 const AdminPanel = lazy(() => import("./components/AdminPanel"));
+const About = lazy(() => import("./components/About"));
+
+const readPath = () => window.location.pathname.replace(/\/$/, "");
 
 export default function App() {
   const [user, setUser] = useState(null),
     [authLoading, setAuthLoading] = useState(true);
   const [error, setError] = useState(""),
     [version, setVersion] = useState(0);
-  const admin = window.location.pathname.replace(/\/$/, "") === "/admin";
+  const [path, setPath] = useState(readPath);
+  const admin = path === "/admin",
+    about = path === "/about";
+  const returnTab = new URLSearchParams(location.search).get("from");
+  const returnTo = ["ranking", "groups"].includes(returnTab)
+    ? `/?tab=${returnTab}`
+    : "/";
+  useEffect(() => {
+    const updatePath = () => setPath(readPath());
+    window.addEventListener("popstate", updatePath);
+    return () => window.removeEventListener("popstate", updatePath);
+  }, []);
+  function navigate(event, destination) {
+    if (
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    )
+      return;
+    event.preventDefault();
+    history.pushState({}, "", destination);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    window.scrollTo(0, 0);
+  }
+  function openAbout(event) {
+    if (
+      about &&
+      event.button === 0 &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.shiftKey &&
+      !event.altKey
+    ) {
+      event.preventDefault();
+      return;
+    }
+    const tab = new URLSearchParams(location.search).get("tab");
+    navigate(
+      event,
+      ["ranking", "groups"].includes(tab) ? `/about?from=${tab}` : "/about",
+    );
+  }
   const pendingRefresh = useRef(null),
     didRefresh = useRef(false);
   const refresh = useCallback(() => {
@@ -66,40 +112,73 @@ export default function App() {
         Zum Inhalt
       </a>
       <header className="header">
-        <a href="/" className="brand">
+        <a href="/" className="brand" onClick={(event) => navigate(event, "/")}>
           <img src={logo} alt="" className="logo" />
           <div>
             <strong>November Jogging Challenge</strong>
             <span>Gemeinsam durch den November</span>
           </div>
         </a>
-        <div className="account">
-          {authLoading ? (
-            <span className="muted">Anmeldung prüfen …</span>
-          ) : user ? (
-            <>
-              <span className="account-name">{user.name}</span>
-              <button className="btn small" onClick={logout}>
-                Abmelden
-              </button>
-            </>
-          ) : (
-            <a
-              className="btn strava"
-              href={isPreview ? "#" : loginUrl()}
-              onClick={
-                isPreview
-                  ? (e) => {
-                      e.preventDefault();
-                      previewLogin(true);
-                      refresh();
-                    }
-                  : undefined
-              }
+        <div className="header-actions">
+          <a
+            className="info-link"
+            href="/about"
+            aria-label="Über uns"
+            title="Über uns"
+            aria-current={about ? "page" : undefined}
+            onClick={openAbout}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="26"
+              height="26"
+              fill="none"
+              aria-hidden="true"
             >
-              Mit Strava anmelden
-            </a>
-          )}
+              <circle
+                cx="12"
+                cy="12"
+                r="9"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              />
+              <path
+                d="M12 11v6"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              />
+              <circle cx="12" cy="7.5" r="1.1" fill="currentColor" />
+            </svg>
+          </a>
+          <div className="account">
+            {authLoading ? (
+              <span className="muted">Anmeldung prüfen …</span>
+            ) : user ? (
+              <>
+                <span className="account-name">{user.name}</span>
+                <button className="btn small" onClick={logout}>
+                  Abmelden
+                </button>
+              </>
+            ) : (
+              <a
+                className="btn strava"
+                href={isPreview ? "#" : loginUrl()}
+                onClick={
+                  isPreview
+                    ? (e) => {
+                        e.preventDefault();
+                        previewLogin(true);
+                        refresh();
+                      }
+                    : undefined
+                }
+              >
+                Mit Strava anmelden
+              </a>
+            )}
+          </div>
         </div>
       </header>
       {isPreview && (
@@ -122,7 +201,11 @@ export default function App() {
             erneut starten.
           </div>
         )}
-        {admin ? (
+        {about ? (
+          <Suspense fallback={<RunnerLoader />}>
+            <About returnTo={returnTo} navigate={navigate} />
+          </Suspense>
+        ) : admin ? (
           <Suspense fallback={<RunnerLoader />}>
             <AdminPanel />
           </Suspense>

@@ -222,7 +222,7 @@ export default function Groups({ user }) {
       <div className="section-heading">
         <div>
           <span className="eyebrow">Zusammen läuft’s leichter</span>
-          <h2 id="groups-title">Läufergruppen</h2>
+          <h2 id="groups-title">Laufgruppen</h2>
         </div>
         <button className="btn primary" onClick={() => setForm("new")}>
           <span aria-hidden="true">＋</span> Lauf erstellen

@@ -25,7 +25,7 @@ Im Admin kann eine Auslosung mit **Auslosung zurücksetzen** auch nach Beginn de
 
 Rangliste: kompakte Feldchen pro Person, auf Desktop gemeinsame Nummernzeile. Auf Handy ein kleines Raster aus drei Zeilen; Antippen öffnet die nummerierten Details. Immer höchstens eine Person ausgeklappt.
 
-Läufergruppen: Karte mit Startpunkten, Erstellen und Teilnehmen auch als Gast mit frei eingegebenem Namen. Name, km, Pace, Schweizer Startzeit und ein Kartenpunkt samt Beschreibung sind Pflicht. Ersteller ist automatisch Teilnehmer. Eigene Teilnahme/Läufe lassen sich über einen persistenten Browser-Cookie verwalten, optional zusätzlich über Strava. Sichtbarkeit endet exakt drei Stunden nach Start, auch ohne Bereinigungsjob oder Backend-Neustart. Namen und Koordinaten werden öffentlich angezeigt; Identitätsschlüssel werden nicht ausgeliefert.
+Laufgruppen: Karte mit Startpunkten, Erstellen und Teilnehmen auch als Gast mit frei eingegebenem Namen. Name, km, Pace, Schweizer Startzeit und ein Kartenpunkt samt Beschreibung sind Pflicht. Ersteller ist automatisch Teilnehmer. Eigene Teilnahme/Läufe lassen sich über einen persistenten Browser-Cookie verwalten, optional zusätzlich über Strava. Sichtbarkeit endet exakt drei Stunden nach Start, auch ohne Bereinigungsjob oder Backend-Neustart. Namen und Koordinaten werden öffentlich angezeigt; Identitätsschlüssel werden nicht ausgeliefert.
 
 ## Daten und Betrieb
 

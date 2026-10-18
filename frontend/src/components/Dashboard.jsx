@@ -76,7 +76,7 @@ export default function Dashboard({ user, version, refresh, authLoading }) {
           {[
             ["overview", "Übersicht"],
             ["ranking", "Rangliste"],
-            ["groups", "Läufergruppen"],
+            ["groups", "Laufgruppen"],
           ].map(([key, label]) => (
             <button
               key={key}

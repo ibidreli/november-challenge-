@@ -79,7 +79,7 @@ test("real API: cookie login, manual correction, draw publication and guest pers
     page.getByRole("link", { name: /Mit Strava anmelden/ }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "Läufergruppen", exact: true })
+    .getByRole("button", { name: "Laufgruppen", exact: true })
     .click();
   await page
     .getByRole("button", { name: /Lauf erstellen/ })
