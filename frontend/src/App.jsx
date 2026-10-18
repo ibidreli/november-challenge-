@@ -47,16 +47,9 @@ export default function App() {
     window.dispatchEvent(new PopStateEvent("popstate"));
     window.scrollTo(0, 0);
   }
-  function openAbout(event) {
-    if (
-      about &&
-      event.button === 0 &&
-      !event.metaKey &&
-      !event.ctrlKey &&
-      !event.shiftKey &&
-      !event.altKey
-    ) {
-      event.preventDefault();
+  function toggleAbout(event) {
+    if (about) {
+      navigate(event, returnTo);
       return;
     }
     const tab = new URLSearchParams(location.search).get("tab");
@@ -121,12 +114,11 @@ export default function App() {
         </a>
         <div className="header-actions">
           <a
-            className="info-link"
-            href="/about"
-            aria-label="Über uns"
-            title="Über uns"
-            aria-current={about ? "page" : undefined}
-            onClick={openAbout}
+            className={`info-link${about ? " active" : ""}`}
+            href={about ? returnTo : "/about"}
+            aria-label={about ? "Zurück zur Challenge" : "Über uns"}
+            title={about ? "Zurück zur Challenge" : "Über uns"}
+            onClick={toggleAbout}
           >
             <svg
               viewBox="0 0 24 24"

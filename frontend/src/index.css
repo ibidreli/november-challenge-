@@ -158,7 +158,7 @@ b {
   text-decoration: none;
 }
 .info-link:hover,
-.info-link[aria-current="page"] {
+.info-link.active {
   background: #eaf6f4;
   color: var(--teal-dark);
 }

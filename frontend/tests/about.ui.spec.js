@@ -62,10 +62,7 @@ test("authenticated navigation preserves login, the previous tab, and browser hi
   await expect(
     page.getByRole("button", { name: "Abmelden", exact: true }),
   ).toBeVisible();
-  await page
-    .getByRole("link", { name: "Zurück zur Challenge", exact: true })
-    .first()
-    .click();
+  await page.locator(".info-link").click();
   await expect(page).toHaveURL(/\/\?tab=ranking$/);
   await expect(page.locator(".ranking-card")).toHaveCount(4);
   await page.goBack();
@@ -95,9 +92,7 @@ test("direct about links reload correctly and fit mobile and tablet widths", asy
     testInfo.project.name === "mobile" ? [320, 390] : [768, 1024, 1440];
   for (const width of widths) {
     await page.setViewportSize({ width, height: 900 });
-    await expect(
-      page.getByRole("link", { name: "Über uns", exact: true }),
-    ).toBeVisible();
+    await expect(page.locator(".info-link")).toBeVisible();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -116,4 +111,33 @@ test("direct about links reload correctly and fit mobile and tablet widths", asy
     page.getByRole("heading", { name: "Jeder Lauf bringt uns weiter." }),
   ).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test("info icon toggles back to each previous challenge tab", async ({
+  page,
+}) => {
+  for (const [tab, label] of [
+    ["overview", "Übersicht"],
+    ["ranking", "Rangliste"],
+    ["groups", "Laufgruppen"],
+  ]) {
+    const previous = tab === "overview" ? "/" : `/?tab=${tab}`;
+    await page.goto(previous);
+    await expect(
+      page.getByRole("button", { name: label, exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+    await page.locator(".info-link").click();
+    await expect(
+      page.getByRole("heading", { name: "Über uns", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(".info-link")).toHaveAttribute("href", previous);
+    await page.locator(".info-link").click();
+    expect(new URL(page.url()).pathname + new URL(page.url()).search).toBe(
+      previous,
+    );
+    await expect(
+      page.getByRole("button", { name: label, exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+    await expect(page.locator(".info-link")).toHaveAccessibleName("Über uns");
+  }
 });

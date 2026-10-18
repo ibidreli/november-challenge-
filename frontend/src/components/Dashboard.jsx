@@ -288,7 +288,7 @@ export default function Dashboard({ user, version, refresh, authLoading }) {
                     Wir werden die Challenge am{" "}
                     {challengeDate(data.config.finale_date)} wenn möglich
                     Gemeinsam abschliessen, mit einer Strecke von{" "}
-                    {data.config.finale_km} km
+                    {data.config.finale_km} km. Schön bist du dabei!
                   </span>
                 </li>
               </ol>

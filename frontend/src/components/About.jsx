@@ -46,7 +46,7 @@ const editions = [
       "Lukas Hohwald",
       "Christoph Meister",
       "Elias Pulver",
-      "Samuel Skott",
+      "Samuel Skotta",
     ],
     examples: [
       ["1. November", 17],
@@ -191,9 +191,6 @@ export default function About({ returnTo, navigate }) {
           </article>
         ))}
       </section>
-      <div className="about-bottom">
-        <BackLink returnTo={returnTo} navigate={navigate} />
-      </div>
     </div>
   );
 }
