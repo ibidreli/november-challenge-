@@ -58,6 +58,7 @@ class ApiTests(unittest.TestCase):
         with SessionLocal() as db:
             challenge.seed(db)
         self.today = self.enterContext(patch("services.challenge.local_today", return_value=date(2026, 11, 4)))
+        self.enterContext(patch("services.strava.local_today", self.today))
         self.enterContext(patch("routes.admin.local_today", return_value=date(2026, 12, 1)))
         self.enterContext(patch("requests.sessions.Session.request", side_effect=AssertionError("Unexpected network request")))
         self.client = self.enterContext(TestClient(main.app))
@@ -231,6 +232,84 @@ class ApiTests(unittest.TestCase):
         self.assertNotIn("must-not-log", " ".join(logs.output))
         self.assertEqual(self.result(uid)["total_score"], 29)
         self.assertIn("Freigabe", self.client.get("/users/me").json()["sync_error"])
+
+    def test_upcoming_challenge_skips_sync_without_changing_existing_data(self):
+        self.publish(); uid = self.add_user(strava_id=99)
+        aid = self.add_run(uid, 35, 1, sid=900)
+        self.authorize(uid)
+        previous_sync = datetime(2026, 10, 18, 8)
+        previous_attempt = datetime(2026, 10, 19, 8)
+        error = "Previous Strava import failed"
+        with SessionLocal() as db:
+            user = db.get(User, uid)
+            user.token_expires_at = 1  # Even an expired token must not trigger a refresh.
+            user.last_synced_at, user.last_sync_attempt_at = previous_sync, previous_attempt
+            user.last_sync_error = error
+            db.commit()
+        self.today.return_value = date(2026, 10, 31)
+        self.assertIsNone(self.client.get("/users/me").json()["sync_error"])
+        with patch("services.strava.requests.get") as get, patch("services.strava.requests.post") as post:
+            with SessionLocal() as db:
+                strava.sync_user(db, uid)
+            # The manual endpoint uses the same guard through its background task.
+            self.assertEqual(self.client.post("/users/me/sync").status_code, 202)
+            get.assert_not_called()
+            post.assert_not_called()
+        with SessionLocal() as db:
+            user = db.get(User, uid)
+            self.assertEqual((user.last_synced_at, user.last_sync_attempt_at, user.last_sync_error),
+                             (previous_sync, previous_attempt, error))
+            self.assertEqual((user.access_token, user.refresh_token, user.token_expires_at),
+                             ("strava-secret", "refresh-secret", 1))
+            activity = db.get(Activity, aid)
+            self.assertEqual((activity.status, activity.effective_km), ("claimed", 29))
+            self.assertEqual(db.query(ChallengeClaim).filter_by(user_id=uid).count(), 1)
+
+    def test_scheduled_sync_resumes_on_first_day_for_october_and_november(self):
+        uid = self.add_user(strava_id=99)
+        self.authorize(uid)
+        for month in (10, 11):
+            with self.subTest(month=month), patch.dict(os.environ, CHALLENGE_MONTH=str(month)):
+                with SessionLocal() as db:
+                    challenge.seed(db)
+                    user = db.get(User, uid)
+                    user.last_synced_at = user.last_sync_attempt_at = None
+                    user.last_sync_error = "Previous Strava import failed"
+                    db.commit()
+                self.today.return_value = date(2026, month, 1) - timedelta(days=1)
+                with patch("services.strava.sync_user_background") as worker:
+                    strava.sync_all_background(due_only=True)
+                    worker.assert_not_called()
+                self.assertIsNone(self.client.get("/users/me").json()["sync_error"])
+                # local_today() uses Europe/Zurich, so importing starts at Swiss midnight.
+                self.today.return_value = date(2026, month, 1)
+                with patch("services.strava.requests.get", return_value=reply([])) as request:
+                    strava.sync_all_background(due_only=True)
+                    request.assert_called_once()
+                    from services.time import ZURICH
+                    self.assertEqual(request.call_args.kwargs["params"]["after"],
+                                     int(datetime(2026, month, 1, tzinfo=ZURICH).timestamp()) - 1)
+                with SessionLocal() as db:
+                    user = db.get(User, uid)
+                    self.assertIsNotNone(user.last_synced_at)
+                    self.assertIsNotNone(user.last_sync_attempt_at)
+                    self.assertIsNone(user.last_sync_error)
+
+    def test_bad_request_during_active_challenge_is_still_reported(self):
+        import requests
+        self.publish(); uid = self.add_user(strava_id=99)
+        self.add_run(uid, 35, 1, sid=900)
+        self.authorize(uid)
+        self.today.return_value = date(2026, 11, 1)
+        response = requests.Response()
+        response.status_code = 400
+        response.url = "https://www.strava.com/api/v3/athlete/activities"
+        response._content = b'{"message":"Bad Request"}'
+        with patch("services.strava.requests.get", return_value=response), self.assertLogs("services.strava", level="WARNING") as logs:
+            strava.sync_user_background(uid)
+        self.assertIn("status=400 endpoint=/api/v3/athlete/activities", logs.output[0])
+        self.assertTrue(self.client.get("/users/me").json()["sync_error"])
+        self.assertEqual(self.result(uid)["total_score"], 29)
 
     def test_migration_upgrades_existing_weekly_edition_without_changing_dates(self):
         from sqlalchemy import create_engine, text, inspect

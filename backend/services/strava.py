@@ -11,7 +11,7 @@ from database import SessionLocal, engine
 from models.user import User
 from models.activity import Activity
 from services.challenge import edition, lock_user, rebuild_user
-from services.time import utcnow, ZURICH
+from services.time import local_today, utcnow, ZURICH
 from services.schedule import bounds
 
 log = logging.getLogger(__name__)
@@ -115,6 +115,10 @@ def sync_user(db, user_id):
     e = edition(db)
     first, last = bounds(db, e)
     db.commit()
+    # No activities can belong to a challenge that has not started yet.
+    # Skip before token refresh or reconciliation; existing data stays untouched.
+    if local_today() < first:
+        return
     after = int(datetime.combine(first, time(), ZURICH).timestamp()) - 1
     before = int(datetime.combine(last + timedelta(days=1), time(), ZURICH).timestamp())
     fetched = []
@@ -175,6 +179,8 @@ def sync_user_background(user_id):
 
 def sync_all_background(due_only=False):
     with SessionLocal() as db:
+        if local_today() < bounds(db, edition(db))[0]:
+            return
         query = select(User.id).where(User.refresh_token.is_not(None))
         if due_only:
             query = query.where((User.last_sync_attempt_at.is_(None)) | (User.last_sync_attempt_at < utcnow() - timedelta(minutes=30)))

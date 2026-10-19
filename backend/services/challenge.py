@@ -143,7 +143,8 @@ def participant(db, user, claims=None, targets=None, ps=None, personal=False, e=
     if personal:
         result["strava_connected"] = bool(user.refresh_token)
         result["last_synced_at"] = iso_utc(user.last_synced_at)
-        result["sync_error"] = user.last_sync_error
+        # A previous import error is irrelevant while this edition is still upcoming.
+        result["sync_error"] = user.last_sync_error if today >= min(p.starts_on for p in ps) else None
     return result
 
 def leaderboard(db):

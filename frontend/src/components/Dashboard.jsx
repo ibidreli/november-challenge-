@@ -261,7 +261,7 @@ export default function Dashboard({ user, version, refresh, authLoading }) {
                 <span className="eyebrow">
                   {data.config.test_mode
                     ? "30 Distanzen. Dein Testlauf."
-                    : "30 Distanzen. Dein November."}
+                    : "30 Distanzen."}
                 </span>
                 <h2>Ein Monat, viele gemeinsame Schritte.</h2>
                 <p>

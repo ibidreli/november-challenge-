@@ -36,6 +36,8 @@ Die Abschlussdistanz und ausgeloste Distanzen werden über `/admin` geändert, o
 
 ## Tests
 
+Vor dem Startdatum der aktiven Edition werden manuelle und automatische Strava-Monatsimporte übersprungen. Dabei werden keine Strava-Anfragen oder Token-Erneuerungen ausgelöst und keine gespeicherten Läufe, Wertungen oder Synchronisationszeitpunkte verändert. Frühere Importfehler werden in der persönlichen Übersicht bis zum Start ausgeblendet. Ab dem ersten Tag nach Schweizer Zeit importiert der Hintergrunddienst automatisch wieder; tatsächliche Fehler werden dann angezeigt. Das gilt für Oktober und November und erfordert keine zusätzliche Render-Einstellung.
+
 API und Wertung, mit automatisch isolierter temporärer SQLite-Datenbank:
 
 ```powershell
