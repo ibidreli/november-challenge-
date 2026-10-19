@@ -28,7 +28,7 @@ test("info link opens the team and past editions with a clear return to the chal
   const year2024 = page
     .locator(".about-edition")
     .filter({ has: page.getByRole("heading", { name: "2024", exact: true }) });
-  await expect(year2025.locator(".about-finishers li")).toHaveCount(8);
+  await expect(year2025.locator(".about-finishers li")).toHaveCount(9);
   await expect(year2025).toContainText("Lukas Hohwald");
   await expect(year2025).toContainText("Samuel Skott");
   await expect(year2025.getByRole("row")).toHaveCount(4);

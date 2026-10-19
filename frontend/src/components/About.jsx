@@ -1,12 +1,15 @@
 import React, { useEffect, useRef } from "react";
+import yanuPortrait from "../../logo/Yänu.png";
+import oliPortrait from "../../logo/Oli.png";
+import eliPortrait from "../../logo/Eli.png";
 import "./About.css";
 
-// Portraits can be added later via an `image` path on each member.
 const members = [
   {
     name: "Yänu",
     role: "Netzwerk & Organisation",
     initial: "Y",
+    image: yanuPortrait,
     paragraphs: [
       "Der Netzwerker im OK. Kennt sämtliche wichtigen Entscheidungsträger:innen von Bern bis Zürich. Bei einer Weltmeisterschaft im «Alles unter einen Hut bringen» wäre er ein heisser Anwärter auf die Goldmedaille.",
       "Seine Begeisterungsfähigkeit und sein Ideenreichtum zeichnen ihn aus.",
@@ -16,6 +19,7 @@ const members = [
     name: "Oli",
     role: "Ideen & Konzept",
     initial: "O",
+    image: oliPortrait,
     paragraphs: [
       "Wie bei so manchem Nachwuchstalent im Fussball gilt auch bei ihm: Ohne Verletzungen hätte es für ganz Grosses gereicht. Spuckt zu Beginn der Challenge jeweils grosse Töne, konnte diesen bisher aber noch nie Taten folgen lassen.",
       "Der Kreativkopf im OK, dem die Ideen für zukünftige Ausgaben so schnell nicht ausgehen.",
@@ -25,6 +29,7 @@ const members = [
     name: "Eli",
     role: "Technik & Umsetzung",
     initial: "E",
+    image: eliPortrait,
     paragraphs: [
       "Mister Decathlon und das neuste Mitglied im Organisationskomitee. Setzt technisch um, was sich Yänu und Oli in ihren Köpfen ausmalen, selbst aber beim besten Willen nicht auf die Reihe kriegen.",
       "Hasst Höhenmeter und macht dafür auf flachen Passagen ordentlich Dampf.",
@@ -45,6 +50,7 @@ const editions = [
       "Vincent Notz",
       "Lukas Hohwald",
       "Christoph Meister",
+      "Sandro Wicki",
       "Elias Pulver",
       "Samuel Skotta",
     ],
@@ -119,7 +125,14 @@ export default function About({ returnTo, navigate }) {
               <div className="about-member-heading">
                 <div className="about-avatar" aria-hidden="true">
                   {member.image ? (
-                    <img src={member.image} alt="" />
+                    <img
+                      src={member.image}
+                      alt=""
+                      width="80"
+                      height="80"
+                      loading="lazy"
+                      decoding="async"
+                    />
                   ) : (
                     member.initial
                   )}
