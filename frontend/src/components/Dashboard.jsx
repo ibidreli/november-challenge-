@@ -336,6 +336,20 @@ export default function Dashboard({ user, version, refresh, authLoading }) {
               ))}
             </div>
           </details>
+          {user && (
+            <p className="overview-whatsapp">
+              Die Kommunikation zur Challenge läuft über{" "}
+              <a
+                href={WHATSAPP_INVITE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="WhatsApp öffnen (neuer Tab)"
+              >
+                WhatsApp
+              </a>
+              .
+            </p>
+          )}
         </>
       )}
     </div>
