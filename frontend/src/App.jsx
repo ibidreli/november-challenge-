@@ -186,7 +186,9 @@ export default function App() {
           </div>
         </div>
       </header>
-      {!admin && !about && !legal && <WhatsAppNotice />}
+      {!authLoading && !user && !admin && !about && !legal && (
+        <WhatsAppNotice />
+      )}
       {isPreview && (
         <div className="preview-banner">
           Vorschau mit Beispieldaten · Änderungen werden nicht gespeichert.
