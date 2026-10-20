@@ -2,6 +2,8 @@ import React, { useEffect, useRef } from "react";
 import yanuPortrait from "../../logo/Yänu.png";
 import oliPortrait from "../../logo/Oli.png";
 import eliPortrait from "../../logo/Eli.png";
+import edition2024Photo from "../../logo/2024.jpg";
+import edition2025Photo from "../../logo/2025.jpg";
 import "./About.css";
 
 const members = [
@@ -40,6 +42,8 @@ const members = [
 const editions = [
   {
     year: 2025,
+    image: edition2025Photo,
+    imageAlt: "Laufgruppe bei der November Challenge 2025 auf einem Waldweg",
     title: "Die Reihenfolge selbst bestimmen",
     description:
       "2025 wurde die Challenge flexibler: Für die volle Punktzahl musste weiterhin an jedem Novembertag ein Lauf absolviert werden. Die Distanzen von 1 bis 30 Kilometern konnten nun aber frei auf die Tage verteilt werden – jede Distanz genau einmal. So liessen sich die Läufe besser planen und die Belastung über den Monat verteilen.",
@@ -65,6 +69,8 @@ const editions = [
   },
   {
     year: 2024,
+    image: edition2024Photo,
+    imageAlt: "Laufgruppe bei der November Challenge 2024 im Wald",
     title: "Jeden Tag einen Kilometer mehr",
     description:
       "2024 gab der Kalender die Distanz vor: Am 1. November stand ein Kilometer auf dem Programm, am 2. zwei, am 3. drei – und so ging es Tag für Tag weiter. Den Abschluss bildeten 30 Kilometer am 30. November. Wer die Challenge vollständig absolvierte, lief an allen 30 Tagen und sammelte insgesamt 465 Kilometer.",
@@ -169,6 +175,16 @@ export default function About({ returnTo, navigate }) {
               <h3>{edition.year}</h3>
               <span>{edition.title}</span>
             </header>
+            <figure className="about-edition-photo">
+              <img
+                src={edition.image}
+                alt={edition.imageAlt}
+                width="1536"
+                height="2048"
+                loading="lazy"
+                decoding="async"
+              />
+            </figure>
             <div className="about-edition-grid">
               <div className="about-edition-copy">
                 <p>{edition.description}</p>

@@ -112,6 +112,20 @@
   font-size: 0.88rem;
   font-weight: 600;
 }
+.about-edition-photo {
+  margin: 0 0 24px;
+  aspect-ratio: 5 / 2;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--about-surface);
+}
+.about-edition-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 62%;
+}
 .about-edition-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 245px;
@@ -251,6 +265,10 @@
   .about-edition-heading > span {
     font-size: 0.8rem;
     line-height: 1.5;
+  }
+  .about-edition-photo {
+    aspect-ratio: 4 / 3;
+    margin-bottom: 20px;
   }
   .about-finishers {
     padding: 18px;
