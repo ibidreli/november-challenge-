@@ -59,6 +59,9 @@ const editions = [
       ["2. November", 2],
       ["3. November", 24],
     ],
+    exampleCaption: "So konnte der Monat beginnen",
+    exampleNote:
+      "Diese Distanzen waren danach vergeben und konnten im November nicht noch einmal gewertet werden.",
   },
   {
     year: 2024,
@@ -66,6 +69,14 @@ const editions = [
     description:
       "2024 gab der Kalender die Distanz vor: Am 1. November stand ein Kilometer auf dem Programm, am 2. zwei, am 3. drei – und so ging es Tag für Tag weiter. Den Abschluss bildeten 30 Kilometer am 30. November. Wer die Challenge vollständig absolvierte, lief an allen 30 Tagen und sammelte insgesamt 465 Kilometer.",
     finishers: ["Franziskus Heinzmann", "Thierry Kneissler"],
+    examples: [
+      ["1. November", 1],
+      ["2. November", 2],
+      ["3. November", 3],
+    ],
+    exampleCaption: "So begann der Monat",
+    exampleNote:
+      "Das Datum gab die Distanz vor. Die Reihenfolge war festgelegt.",
   },
 ];
 
@@ -164,7 +175,7 @@ export default function About({ returnTo, navigate }) {
                 {edition.examples && (
                   <>
                     <table className="about-example">
-                      <caption>So konnte der Monat beginnen</caption>
+                      <caption>{edition.exampleCaption}</caption>
                       <thead>
                         <tr>
                           <th scope="col">Datum</th>
@@ -183,8 +194,7 @@ export default function About({ returnTo, navigate }) {
                       </tbody>
                     </table>
                     <p className="about-example-note">
-                      Diese Distanzen waren danach vergeben und konnten im
-                      November nicht noch einmal gewertet werden.
+                      {edition.exampleNote}
                     </p>
                   </>
                 )}
