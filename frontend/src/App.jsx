@@ -13,6 +13,7 @@ import { previewLogin } from "./previewData";
 import logo from "../logo/Logo.png";
 const AdminPanel = lazy(() => import("./components/AdminPanel"));
 const About = lazy(() => import("./components/About"));
+const Legal = lazy(() => import("./components/Legal"));
 
 const readPath = () => window.location.pathname.replace(/\/$/, "");
 
@@ -23,7 +24,8 @@ export default function App() {
     [version, setVersion] = useState(0);
   const [path, setPath] = useState(readPath);
   const admin = path === "/admin",
-    about = path === "/about";
+    about = path === "/about",
+    legal = path === "/agb";
   const returnTab = new URLSearchParams(location.search).get("from");
   const returnTo = ["ranking", "groups"].includes(returnTab)
     ? `/?tab=${returnTab}`
@@ -56,6 +58,16 @@ export default function App() {
     navigate(
       event,
       ["ranking", "groups"].includes(tab) ? `/about?from=${tab}` : "/about",
+    );
+  }
+  function openLegal(event) {
+    // Read at click time: Dashboard tab changes do not rerender this component.
+    const tab = new URLSearchParams(location.search).get(
+      about || legal ? "from" : "tab",
+    );
+    navigate(
+      event,
+      ["ranking", "groups"].includes(tab) ? `/agb?from=${tab}` : "/agb",
     );
   }
   const pendingRefresh = useRef(null),
@@ -193,7 +205,11 @@ export default function App() {
             erneut starten.
           </div>
         )}
-        {about ? (
+        {legal ? (
+          <Suspense fallback={<RunnerLoader />}>
+            <Legal returnTo={returnTo} navigate={navigate} />
+          </Suspense>
+        ) : about ? (
           <Suspense fallback={<RunnerLoader />}>
             <About returnTo={returnTo} navigate={navigate} />
           </Suspense>
@@ -211,8 +227,19 @@ export default function App() {
         )}
       </main>
       <footer>
-        November Challenge · Made by Elias Pulver.{" "}
-        <a href={admin ? "/" : "/admin"}>{admin ? "Zur Challenge" : "Admin"}</a>
+        <span>November Challenge · Made by Elias Pulver.</span>
+        <nav className="footer-links" aria-label="Rechtliches und Verwaltung">
+          <a
+            href="/agb"
+            aria-current={legal ? "page" : undefined}
+            onClick={openLegal}
+          >
+            AGB & Datenschutz
+          </a>
+          <a href={admin ? "/" : "/admin"}>
+            {admin ? "Zur Challenge" : "Admin"}
+          </a>
+        </nav>
       </footer>
     </div>
   );

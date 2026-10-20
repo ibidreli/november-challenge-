@@ -20,6 +20,8 @@ Die beiden Startbefehle in eigenen Terminals ausführen. Für lokale Entwicklung
 | Logo, auffällige Anmeldung, angemeldeter Name | `frontend/src/App.jsx` |
 | Über uns, OK-Texte und bisherige Ausgaben | `frontend/src/components/About.jsx` |
 | Gestaltung der Über-uns-Seite | `frontend/src/components/About.css` |
+| AGB, Datenschutzerklärung und verantwortliche Kontaktperson | `frontend/src/components/Legal.jsx` |
+| Gestaltung der Rechtstexte | `frontend/src/components/Legal.css` |
 | Persönliche Übersicht und Wochenhinweis | `frontend/src/components/Dashboard.jsx` |
 | Nummerierte Feldchen | `frontend/src/components/ChallengeProgress.jsx` |
 | Kompakte Rangliste | `frontend/src/components/Leaderboard.jsx` |
@@ -35,6 +37,8 @@ Die beiden Startbefehle in eigenen Terminals ausführen. Für lokale Entwicklung
 Die Abschlussdistanz und ausgeloste Distanzen werden über `/admin` geändert, ohne Code oder Deployment. `CHALLENGE_YEAR` und `CHALLENGE_MONTH` bestimmen die aktive Edition. Standard ist November (`11`); für einen Oktober-Probelauf auf derselben Website `10` setzen. Die bestehende Datenbank hält Auslosungen und Punkte je Jahr/Monat getrennt; Strava-Verbindungen und Sitzungen bleiben gemeinsam. Ablauf: [OCTOBER_TEST.md](OCTOBER_TEST.md).
 
 ## Tests
+
+Die Seite `/agb` ist im Footer neben Admin verlinkt und enthält den Entwurf für Teilnahmebedingungen und Datenschutzerklärung. Sie holt keine Einwilligungen ein und begründet keine rückwirkende Zustimmung für bereits veröffentlichte Namen, Resultate oder Fotos. Einwilligung und rechtliche Prüfung werden separat behandelt. Die Aufbewahrungsangaben beschreiben den aktuellen Stand: Abgelaufene Laufgruppen werden ausgeblendet, aber nicht automatisch aus der Datenbank gelöscht. Anbieter, Empfängerstaaten, Kontaktdaten und Textstand bei Änderungen aktualisieren. Grundlage des Entwurfs: [Informationspflicht](https://www.edoeb.admin.ch/de/informationspflicht), [Datenschutz in Vereinen](https://www.edoeb.admin.ch/de/datenschutz-in-vereinen) und [Umgang mit Fotos](https://www.edoeb.admin.ch/de/umgang-mit-fotos) des EDÖB sowie die verlinkten Anbieterinformationen.
 
 Vor dem Startdatum der aktiven Edition werden manuelle und automatische Strava-Monatsimporte übersprungen. Dabei werden keine Strava-Anfragen oder Token-Erneuerungen ausgelöst und keine gespeicherten Läufe, Wertungen oder Synchronisationszeitpunkte verändert. Frühere Importfehler werden in der persönlichen Übersicht bis zum Start ausgeblendet. Ab dem ersten Tag nach Schweizer Zeit importiert der Hintergrunddienst automatisch wieder; tatsächliche Fehler werden dann angezeigt. Das gilt für Oktober und November und erfordert keine zusätzliche Render-Einstellung.
 

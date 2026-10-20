@@ -185,6 +185,8 @@ b {
 }
 footer {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
   gap: 14px;
   font-size: 0.75rem;
@@ -193,6 +195,18 @@ footer {
 }
 footer a {
   color: var(--muted);
+}
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 20px;
+}
+.footer-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  text-underline-offset: 3px;
 }
 .btn {
   display: inline-flex;

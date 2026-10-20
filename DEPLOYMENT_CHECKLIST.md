@@ -59,7 +59,7 @@ Im bestehenden Static-Site-Service:
 
 Die eingecheckte `.env.production` enthält ebenfalls diese API-Adresse. Eine eventuell bisher in Render gesetzte alte API-Adresse **überschreiben**, da Render-Variablen Vorrang haben. Nach Änderung neu bauen; Vite-Werte werden beim Build eingebettet.
 
-Unter **Redirects/Rewrites** eine **Rewrite**-Regel setzen: Source `/*`, Destination `/index.html`, Action `Rewrite`. Dadurch funktionieren die direkten Aufrufe von `/admin` und `/about` (Über uns). Das vorhandene `_redirects` allein konfiguriert Render nicht. [Render Static Sites](https://render.com/docs/static-sites).
+Unter **Redirects/Rewrites** eine **Rewrite**-Regel setzen: Source `/*`, Destination `/index.html`, Action `Rewrite`. Dadurch funktionieren die direkten Aufrufe von `/admin`, `/about` (Über uns) und `/agb` (AGB & Datenschutz). Das vorhandene `_redirects` allein konfiguriert Render nicht. [Render Static Sites](https://render.com/docs/static-sites).
 
 Optional anderer Kartenanbieter: `VITE_MAP_TILE_URL` mit `{z}/{x}/{y}` und passende `VITE_MAP_ATTRIBUTION`. Der Standard zeigt OpenStreetMap mit Quellenangabe. Für die Karte ist kein Strava-Login nötig.
 
