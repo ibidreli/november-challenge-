@@ -6,6 +6,7 @@ import Leaderboard from "./Leaderboard";
 import usePublicResource from "../usePublicResource";
 import TestNotice from "./TestNotice";
 import RunnerLoader from "./RunnerLoader";
+import { WHATSAPP_INVITE_URL } from "./WhatsAppNotice";
 import { challengeDate } from "../time";
 const Groups = lazy(() => import("./Groups"));
 
@@ -268,6 +269,18 @@ export default function Dashboard({ user, version, refresh, authLoading }) {
                   Jede Woche werden neue Distanzen ausgelost. Du entscheidest,
                   an welchem Tag du welche läufst. Melde dich oben mit Strava
                   an, dann erscheint hier deine persönliche Übersicht.
+                </p>
+                <p className="intro-whatsapp">
+                  Die Kommunikation zur Challenge läuft über{" "}
+                  <a
+                    href={WHATSAPP_INVITE_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="WhatsApp öffnen (neuer Tab)"
+                  >
+                    WhatsApp
+                  </a>
+                  .
                 </p>
               </div>
               <ol>

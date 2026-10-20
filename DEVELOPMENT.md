@@ -18,6 +18,7 @@ Die beiden Startbefehle in eigenen Terminals ausführen. Für lokale Entwicklung
 | --- | --- |
 | Farben, Abstände, mobile Darstellung | `frontend/src/index.css` |
 | Logo, auffällige Anmeldung, angemeldeter Name | `frontend/src/App.jsx` |
+| WhatsApp-Einladungslink und kompakte Hinweiszeile | `frontend/src/components/WhatsAppNotice.jsx` |
 | Über uns, OK-Texte und bisherige Ausgaben | `frontend/src/components/About.jsx` |
 | Gestaltung der Über-uns-Seite | `frontend/src/components/About.css` |
 | AGB, Datenschutzerklärung und verantwortliche Kontaktperson | `frontend/src/components/Legal.jsx` |

@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import Dashboard from "./components/Dashboard";
 import RunnerLoader from "./components/RunnerLoader";
+import WhatsAppNotice from "./components/WhatsAppNotice";
 import { api, isPreview, loginUrl, errorText } from "./api";
 import { previewLogin } from "./previewData";
 import logo from "../logo/Logo.png";
@@ -185,6 +186,7 @@ export default function App() {
           </div>
         </div>
       </header>
+      {!admin && !about && !legal && <WhatsAppNotice />}
       {isPreview && (
         <div className="preview-banner">
           Vorschau mit Beispieldaten · Änderungen werden nicht gespeichert.
@@ -227,7 +229,7 @@ export default function App() {
         )}
       </main>
       <footer>
-        <span>November Challenge · Made by Elias Pulver.</span>
+        <span>Made by Elias Pulver</span>
         <nav className="footer-links" aria-label="Rechtliches und Verwaltung">
           <a
             href="/agb"
