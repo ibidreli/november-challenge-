@@ -177,7 +177,8 @@ b {
 }
 .whatsapp-notice {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) auto;
+  grid-template-columns: 22px minmax(0, max-content) max-content;
+  justify-content: center;
   align-items: center;
   gap: 10px;
   min-height: 44px;
@@ -189,6 +190,7 @@ b {
   color: var(--teal-dark);
   font-size: 0.83rem;
   line-height: 1.35;
+  text-align: center;
   text-decoration: none;
 }
 .whatsapp-notice:hover {
@@ -200,6 +202,7 @@ b {
 }
 .whatsapp-notice-action {
   display: inline-flex;
+  justify-content: center;
   align-items: center;
   gap: 6px;
   font-weight: 700;
@@ -1368,7 +1371,7 @@ th {
     flex: 1;
   }
   .whatsapp-notice {
-    grid-template-columns: 22px minmax(0, 1fr);
+    grid-template-columns: 22px minmax(0, max-content);
     gap: 2px 10px;
     padding: 8px 12px;
   }
