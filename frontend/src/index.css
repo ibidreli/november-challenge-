@@ -177,7 +177,8 @@ b {
 }
 .whatsapp-notice {
   display: grid;
-  grid-template-columns: 22px minmax(0, max-content) max-content;
+  grid-template-columns: minmax(0, max-content) max-content 22px;
+  grid-template-areas: "description action icon";
   justify-content: center;
   align-items: center;
   gap: 10px;
@@ -198,9 +199,14 @@ b {
   border-color: #b1d8d1;
 }
 .whatsapp-notice-icon {
+  grid-area: icon;
   color: var(--teal);
 }
+.whatsapp-notice-description {
+  grid-area: description;
+}
 .whatsapp-notice-action {
+  grid-area: action;
   display: inline-flex;
   justify-content: center;
   align-items: center;
@@ -1371,18 +1377,17 @@ th {
     flex: 1;
   }
   .whatsapp-notice {
-    grid-template-columns: 22px minmax(0, max-content);
+    grid-template-columns: minmax(0, max-content) 22px;
+    grid-template-areas:
+      "description icon"
+      "action icon";
     gap: 2px 10px;
     padding: 8px 12px;
-  }
-  .whatsapp-notice-icon {
-    grid-row: span 2;
   }
   .whatsapp-notice-description {
     font-size: 0.75rem;
   }
   .whatsapp-notice-action {
-    grid-column: 2;
     font-size: 0.8rem;
   }
   .container {
