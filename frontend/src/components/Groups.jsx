@@ -229,8 +229,7 @@ export default function Groups({ user }) {
         </button>
       </div>
       <p className="muted">
-        Finde einen Lauf in deiner Nähe oder lade andere ein. Erstellen und
-        Teilnehmen geht auch ohne Anmeldung.
+        Finde einen Lauf in deiner Nähe oder lade andere ein.
       </p>
       {error && (
         <p className="notice error" role="alert">

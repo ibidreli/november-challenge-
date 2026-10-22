@@ -133,7 +133,7 @@ export default function Dashboard({ user, version, refresh, authLoading }) {
               <div className="section-heading">
                 <div>
                   <span className="eyebrow">Deine Challenge</span>
-                  <h2 id="personal-title">Hallo {user.name.split(" ")[0]}.</h2>
+                  <h2 id="personal-title">Hallo {user.name.split(" ")[0]}</h2>
                 </div>
                 <div className="personal-totals">
                   <strong>

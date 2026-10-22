@@ -42,7 +42,7 @@ test("info link opens the team and past editions with a clear return to the chal
     .click();
   await expect(page).toHaveURL(/\/$/);
   await expect(
-    page.getByRole("heading", { name: "Jeder Lauf bringt uns weiter." }),
+    page.getByRole("heading", { name: "Alle Läufe zusammen " }),
   ).toBeVisible();
   await expect(page).toHaveTitle("November Challenge");
 });
@@ -108,7 +108,7 @@ test("direct about links reload correctly and fit mobile and tablet widths", asy
     .first()
     .click();
   await expect(
-    page.getByRole("heading", { name: "Jeder Lauf bringt uns weiter." }),
+    page.getByRole("heading", { name: "Alle Läufe zusammen " }),
   ).toBeVisible();
   expect(errors).toEqual([]);
 });

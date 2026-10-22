@@ -17,7 +17,7 @@ test("overview, personal progress, compact ranking and mobile fit", async ({
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "Jeder Lauf bringt uns weiter." }),
+    page.getByRole("heading", { name: "Alle Läufe zusammen " }),
   ).toBeVisible();
   await expect(page.locator(".personal-panel")).toHaveCount(0);
   await page.getByRole("link", { name: /Mit Strava anmelden/ }).click();

@@ -48,8 +48,8 @@ export default function ChallengeStats({ stats, config }) {
     <section className="stats-panel" aria-labelledby="stats-title">
       <div className="section-heading">
         <div>
-          <span className="eyebrow">Unsere gemeinsame Challenge</span>
-          <h2 id="stats-title">Jeder Lauf bringt uns weiter.</h2>
+          <span className="eyebrow">Unsere Challenge</span>
+          <h2 id="stats-title">Alle Läufe zusammen</h2>
         </div>
         <div className="stat-total">
           <strong>{stats.total_km.toLocaleString("de-CH")}</strong>
