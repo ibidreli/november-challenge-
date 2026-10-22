@@ -60,13 +60,6 @@ export default function ChallengeStats({ stats, config }) {
         {stats.participants} Teilnehmer/innen · Gezählt werden die abgehakten
         Distanzen.
       </p>
-      {!points.length && (
-        <p className="notice">
-          Am{" "}
-          {challengeDate(config.starts_on || config.periods[0].starts_on, true)}{" "}
-          geht’s los. Hier wächst dann unsere gemeinsame Kilometerkurve.
-        </p>
-      )}
       <svg
         className="km-chart"
         ref={chart}
